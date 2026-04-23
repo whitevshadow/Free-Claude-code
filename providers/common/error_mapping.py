@@ -17,19 +17,19 @@ from providers.rate_limit import GlobalRateLimiter
 # Claw Code US-022: actionable hints per HTTP status code
 _STATUS_HINTS: dict[int, str] = {
     400: "Bad request — the model may be temporarily degraded or unavailable. "
-         "Try switching MODEL_OPUS in .env (e.g. to deepseek-v3.2).",
+    "Try switching MODEL_OPUS in .env (e.g. to deepseek-v3.2).",
     401: "Authentication failed — check NVIDIA_NIM_API_KEY in your .env file.",
     403: "Access denied — your API key lacks access to this model. "
-         "Try a different model in .env.",
+    "Try a different model in .env.",
     413: "Request too large — start a new Claude Code session to reduce context, "
-         "or switch to a model with a larger context limit.",
+    "or switch to a model with a larger context limit.",
     429: "Rate limit hit — the proxy is retrying automatically. "
-         "If this persists, reduce PROVIDER_MAX_CONCURRENCY in .env.",
+    "If this persists, reduce PROVIDER_MAX_CONCURRENCY in .env.",
     500: "Provider internal error — try again or switch to a different model.",
     502: "Bad gateway — provider is temporarily unavailable. Retry shortly.",
     503: "Provider unavailable — retry shortly or switch models.",
     504: "Gateway timeout — provider took too long to respond. "
-         "If using a large model, increase HTTP_READ_TIMEOUT in .env.",
+    "If using a large model, increase HTTP_READ_TIMEOUT in .env.",
 }
 
 
@@ -81,7 +81,9 @@ def get_user_facing_error_message(
         return "Provider is currently overloaded. Please retry shortly."
     if isinstance(e, APIError):
         if e.status_code in (502, 503, 504):
-            return _STATUS_HINTS.get(e.status_code, "Provider is temporarily unavailable. Please retry.")
+            return _STATUS_HINTS.get(
+                e.status_code, "Provider is temporarily unavailable. Please retry."
+            )
         return "Provider API request failed."
     if isinstance(e, ProviderError):
         return "Provider request failed."

@@ -37,7 +37,9 @@ A lightweight proxy that routes Claude Code's Anthropic API calls to **NVIDIA NI
 | **Heuristic Tool Parser**  | Models outputting tool calls as text are auto-parsed into structured tool use                   |
 | **Request Optimization**   | 5 categories of trivial API calls intercepted locally, saving quota and latency                 |
 | **Smart Rate Limiting**    | Proactive rolling-window throttle + reactive 429 exponential backoff + optional concurrency cap |
-| **Discord / Telegram Bot** | Remote autonomous coding with tree-based threading, session persistence, and live progress      |
+| **Cross-Tier Fallback**  | Native routing fallback (Opus -> Sonnet -> Haiku) ensures you never hard-crash during limits |
+| **Agentic Integrity**    | Caveman system logic, 6MB size-guards, and Kimi `is_error` fixes baked-in for extreme stability |
+| **Render/Docker Ready**  | Completely containerized with a highly-optimized Dockerfile designed to be deployable on Render |
 | **Subagent Control**       | Task tool interception forces `run_in_background=False`. No runaway subagents                   |
 | **Extensible**             | Clean `BaseProvider` and `MessagingPlatform` ABCs. Add new providers or platforms easily        |
 
@@ -76,10 +78,13 @@ Choose your provider and edit `.env`:
 ```dotenv
 NVIDIA_NIM_API_KEY="nvapi-your-key-here"
 
-MODEL_OPUS="nvidia_nim/z-ai/glm4.7"
-MODEL_SONNET="nvidia_nim/moonshotai/kimi-k2-thinking"
+MODEL_OPUS="nvidia_nim/z-ai/glm-4.7"
+MODEL_SONNET="nvidia_nim/moonshotai/kimi-k2-instruct"
 MODEL_HAIKU="nvidia_nim/stepfun-ai/step-3.5-flash"
-MODEL="nvidia_nim/z-ai/glm4.7"                     # fallback
+MODEL="nvidia_nim/moonshotai/kimi-k2-instruct"     # fallback
+
+# Enable Agentic Caveman Logic
+ENABLE_CAVEMAN=true
 
 # Global switch for provider reasoning requests and Claude thinking blocks.
 ENABLE_THINKING=true
@@ -187,13 +192,34 @@ claude-pick
 Use this feature if:
 - Running the proxy on a public network
 - Sharing the server with others but restricting access
-- Wanting an additional layer of security
+- Deploying to a cloud service like Render
 
 </details>
 
-### Run It
+## 📂 Project Structure & Architecture
 
-**Terminal 1:** Start the proxy server:
+Free Claude Code operates as a clean FastAPI proxy gateway intercepting payloads and managing provider constraints:
+
+```text
+free-claude-code/
+├── api/                   # FastAPI routes, Pydantic Anthropic schemas, Optimization interceptors
+├── cli/                   # Free Claude IDE launcher environment and sub-process managers
+├── config/                # Global Settings, dynamic timeouts, and Tiered-mapping configuration
+├── messaging/             # (Optional) Discord & Telegram Bot infrastructure for remote-agent coding
+├── providers/             # Provider-specific mapping and resilience mechanisms
+│   ├── common/            # Pre-flight guards, Context Size limiters, Error Mapping, Caveman injection
+│   ├── nvidia_nim/        # Direct NVIDIA model request formatting
+│   ├── deepseek/          # Direct DeepSeek request schemas
+│   ├── openai_compat.py   # Master streaming engine handling Cross-Tier Fallbacks and async generation
+│   └── base.py            # Abstract Base Provider
+├── tests/                 # Comprehensive pytest suite evaluating context truncation and stream states
+├── Dockerfile             # Render-optimized Docker container specification 
+├── docker-compose.yml     # Local docker orchestration
+├── server.py              # Uvicorn entrypoint bindings
+└── pyproject.toml         # `uv` managed dependencies (Target: Python 3.14 alpha compatibility)
+```
+
+### Run Locally (Terminal)
 
 ```bash
 uv run uvicorn server:app --host 0.0.0.0 --port 8082

@@ -227,7 +227,7 @@ class GlobalRateLimiter:
                     if raw:
                         try:
                             retry_after = float(raw)
-                        except (ValueError, TypeError):
+                        except ValueError, TypeError:
                             pass
 
                 if retry_after is not None:

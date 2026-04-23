@@ -98,7 +98,7 @@ class OpenAICompatibleProvider(BaseProvider):
 
         model_name = body.get("model", "")
         check_request_body_size(body, model_name)
-        
+
         # Resolve tier-specific timeout
         settings = get_settings()
         model_lower = model_name.lower()
@@ -113,7 +113,10 @@ class OpenAICompatibleProvider(BaseProvider):
 
         try:
             stream = await self._global_rate_limiter.execute_with_retry(
-                self._client.chat.completions.create, **body, stream=True, timeout=timeout_s
+                self._client.chat.completions.create,
+                **body,
+                stream=True,
+                timeout=timeout_s,
             )
             return stream, body
         except Exception as error:
@@ -123,7 +126,10 @@ class OpenAICompatibleProvider(BaseProvider):
                 try:
                     check_request_body_size(retry_body, retry_body.get("model", ""))
                     stream = await self._global_rate_limiter.execute_with_retry(
-                        self._client.chat.completions.create, **retry_body, stream=True, timeout=timeout_s
+                        self._client.chat.completions.create,
+                        **retry_body,
+                        stream=True,
+                        timeout=timeout_s,
                     )
                     return stream, retry_body
                 except Exception as inner_error:
@@ -136,21 +142,25 @@ class OpenAICompatibleProvider(BaseProvider):
                     fallback_model = settings.parse_model_name(fallback_model_full)
                     fallback_body = dict(body)
                     fallback_body["model"] = fallback_model
-                    
+
                     # Downgrade timeout for new tier
                     lowered = fallback_model_full.lower()
                     if "sonnet" in lowered or "kimi" in lowered:
                         timeout_s = settings.http_read_timeout_sonnet
                     elif "haiku" in lowered or "step" in lowered:
                         timeout_s = settings.http_read_timeout_haiku
-                        
+
                     logger.warning(
                         "FALLBACK: '{}' failed. Failing over to '{}'...",
-                        model_name, fallback_model
+                        model_name,
+                        fallback_model,
                     )
                     check_request_body_size(fallback_body, fallback_model)
                     stream = await self._global_rate_limiter.execute_with_retry(
-                        self._client.chat.completions.create, **fallback_body, stream=True, timeout=timeout_s
+                        self._client.chat.completions.create,
+                        **fallback_body,
+                        stream=True,
+                        timeout=timeout_s,
                     )
                     return stream, fallback_body
 

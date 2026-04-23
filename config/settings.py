@@ -147,7 +147,7 @@ class Settings(BaseSettings):
     http_read_timeout_haiku: float = Field(
         default=60.0, validation_alias="HTTP_READ_TIMEOUT_HAIKU"
     )
-    
+
     http_write_timeout: float = Field(
         default=10.0, validation_alias="HTTP_WRITE_TIMEOUT"
     )

@@ -19,9 +19,9 @@ def model_rejects_is_error(model: str) -> bool:
 
 # ── Claw Code US-021: request body size pre-flight ────────────────────────────
 _PROVIDER_BODY_LIMITS: dict[str, int] = {
-    "kimi": 6 * 1024 * 1024,      # 6 MB DashScope/Moonshot limit
+    "kimi": 6 * 1024 * 1024,  # 6 MB DashScope/Moonshot limit
     "moonshot": 6 * 1024 * 1024,
-    "default": 100 * 1024 * 1024, # 100 MB generous default
+    "default": 100 * 1024 * 1024,  # 100 MB generous default
 }
 
 
@@ -279,10 +279,11 @@ def build_base_request_body(
     )
 
     system = getattr(request_data, "system", None)
-    
+
     from config.settings import get_settings
+
     settings = get_settings()
-    
+
     if settings.enable_caveman:
         caveman_rules = (
             "\n\n<caveman_mode>\n"
@@ -294,8 +295,8 @@ def build_base_request_body(
             "Drop: articles (a/an/the), filler (just/really/basically/actually), pleasantries. "
             "Fragments OK. Technical terms exact. Code blocks unchanged. Errors quoted exact.\n"
             "Pattern: `[thing] [action] [reason]. [next step].`\n"
-            "Not: \"Sure! I'd be happy to help you with that. The issue is likely caused by...\"\n"
-            "Yes: \"Bug in auth. Token expiry check use `<` not `<=`. Fix:\"\n\n"
+            'Not: "Sure! I\'d be happy to help you with that. The issue is likely caused by..."\n'
+            'Yes: "Bug in auth. Token expiry check use `<` not `<=`. Fix:"\n\n'
             "## Claw Code Mindset\n"
             "You are operating in an autonomous Claw Code environment. "
             "You don't need to ask for permission to use tools if the goal is clear. "
