@@ -43,6 +43,11 @@ A lightweight proxy that routes Claude Code's Anthropic API calls to **NVIDIA NI
 | **Subagent Control**       | Task tool interception forces `run_in_background=False`. No runaway subagents                   |
 | **Extensible**             | Clean `BaseProvider` and `MessagingPlatform` ABCs. Add new providers or platforms easily        |
 
+## 🧠 Agentic Enhancements
+Free Claude Code is natively infused with **Claw Code** philosophy and the **Caveman** agent structure. This guarantees that your interactions with Claude are not just proxied, but actively structurally enhanced:
+- **Caveman System Guardrails:** By setting `ENABLE_CAVEMAN=true`, the proxy forcefully injects terseness and absolute-urgency instructions into the AI's core system payload. The AI stops apologizing, drops the conversational fluff, acts highly autonomously, and directly executes code.
+- **Claw Code Resilience:** The proxy inherits enterprise-grade stabilization strategies ported directly from the autonomous Claw Code harness. This includes **Kimi model `is_error` sanitation** (preventing prompt crashes on Chinese reasoning models), **6MB Request Pre-flight size guards** (saving you from silent 413 blockades), and deeply actionable error mapping routines that tell you exactly how to fix timeouts.
+
 ## Quick Start
 
 ### Prerequisites
