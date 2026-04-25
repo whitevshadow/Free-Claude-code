@@ -14,7 +14,7 @@
 
 A lightweight proxy that routes Claude Code's Anthropic API calls to **NVIDIA NIM** (40 req/min free), **OpenRouter** (hundreds of models), **DeepSeek** (direct API), **LM Studio** (fully local), or **llama.cpp** (local with Anthropic endpoints).
 
-[Quick Start](#quick-start) · [Providers](#providers) · [Discord Bot](#discord-bot) · [Configuration](#configuration) · [Development](#development) · [Contributing](#contributing)
+[Quick Start](#quick-start) · [Cloud Deployment](DEPLOYMENT.md) · [Providers](#providers) · [Discord Bot](#discord-bot) · [Configuration](#configuration) · [Development](#development) · [Contributing](#contributing)
 
 ---
 
@@ -568,6 +568,32 @@ These are enabled by default and intercept trivial Claude Code requests locally 
 </details>
 
 See [`.env.example`](.env.example) for all supported parameters.
+
+---
+
+## 🚀 Cloud Deployment
+
+Ready to deploy to production? See **[DEPLOYMENT.md](DEPLOYMENT.md)** for comprehensive guides covering:
+
+- **Render** (Recommended) - One-click deploy with automatic SSL
+- **Railway** - Simple interface, great DX
+- **Fly.io** - Edge deployment, multiple regions
+- **AWS ECS/Fargate** - Enterprise-grade, scalable
+- **Google Cloud Run** - Serverless, auto-scaling
+- **Azure Container Apps** - Microsoft ecosystem
+- **DigitalOcean** - Simple pricing
+- **Self-Hosted Docker** - Full control
+
+### Quick Deploy to Render
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
+
+1. Click the button above
+2. Set `NVIDIA_NIM_API_KEY` (or your provider's key)
+3. Set `ANTHROPIC_AUTH_TOKEN` for security
+4. Deploy! Your API will be at `https://your-app.onrender.com`
+
+**See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed instructions, environment variables, monitoring setup, and troubleshooting.**
 
 ---
 

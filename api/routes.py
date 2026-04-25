@@ -56,6 +56,22 @@ SUPPORTED_CLAUDE_MODELS = [
         display_name="Claude 3.5 Haiku",
         created_at="2024-10-22T00:00:00Z",
     ),
+    # Newer short-form model names used by Claude Code CLI v2.1.119+
+    ModelResponse(
+        id="claude-opus-4-7",
+        display_name="Claude Opus 4.7",
+        created_at="2025-05-14T00:00:00Z",
+    ),
+    ModelResponse(
+        id="claude-sonnet-4-6",
+        display_name="Claude Sonnet 4.6",
+        created_at="2025-05-14T00:00:00Z",
+    ),
+    ModelResponse(
+        id="claude-haiku-4-5",
+        display_name="Claude Haiku 4.5",
+        created_at="2025-05-14T00:00:00Z",
+    ),
 ]
 
 
