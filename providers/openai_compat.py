@@ -93,8 +93,8 @@ class OpenAICompatibleProvider(BaseProvider):
 
         Claw Code US-021: runs body size pre-flight before sending.
         """
-        from providers.common.message_converter import check_request_body_size
         from config.settings import get_settings
+        from providers.common.message_converter import check_request_body_size
 
         model_name = body.get("model", "")
         check_request_body_size(body, model_name)

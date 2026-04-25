@@ -13,7 +13,6 @@ from providers.exceptions import (
 )
 from providers.rate_limit import GlobalRateLimiter
 
-
 # Claw Code US-022: actionable hints per HTTP status code
 _STATUS_HINTS: dict[int, str] = {
     400: "Bad request — the model may be temporarily degraded or unavailable. "

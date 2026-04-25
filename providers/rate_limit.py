@@ -1,6 +1,7 @@
 """Global rate limiter for API requests."""
 
 import asyncio
+import contextlib
 import random
 import time
 from collections import deque
@@ -225,10 +226,8 @@ class GlobalRateLimiter:
                 if response is not None:
                     raw = getattr(response, "headers", {}).get("retry-after")
                     if raw:
-                        try:
+                        with contextlib.suppress(ValueError, TypeError):
                             retry_after = float(raw)
-                        except ValueError, TypeError:
-                            pass
 
                 if retry_after is not None:
                     delay = min(retry_after + random.uniform(0, jitter), max_delay)

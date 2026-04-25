@@ -209,6 +209,11 @@ class Settings(BaseSettings):
     anthropic_auth_token: str = Field(
         default="", validation_alias="ANTHROPIC_AUTH_TOKEN"
     )
+    # CORS allowed origins (comma-separated list, or "*" for all)
+    # Empty = allow all origins
+    cors_origins: list[str] | None = Field(
+        default=None, validation_alias="CORS_ORIGINS"
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -230,6 +235,16 @@ class Settings(BaseSettings):
     def parse_optional_str(cls, v: Any) -> Any:
         if v == "":
             return None
+        return v
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v: Any) -> Any:
+        """Parse CORS_ORIGINS from comma-separated string or list."""
+        if v is None or v == "":
+            return None
+        if isinstance(v, str):
+            return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
 
     @field_validator("whisper_device")

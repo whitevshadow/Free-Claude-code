@@ -3,8 +3,10 @@
 import asyncio
 import os
 from contextlib import asynccontextmanager
+from typing import Any, cast
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
 
@@ -187,6 +189,37 @@ def create_app() -> FastAPI:
         version="2.0.0",
         lifespan=lifespan,
     )
+
+    # Security: CORS middleware
+    settings = get_settings()
+    allowed_origins = settings.cors_origins if settings.cors_origins else ["*"]
+    # CORSMiddleware is correctly typed as a middleware factory in starlette
+    # but ty's inference needs explicit cast due to generic _MiddlewareFactory type
+    app.add_middleware(
+        cast(Any, CORSMiddleware),
+        allow_origins=allowed_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "HEAD", "OPTIONS"],
+        allow_headers=[
+            "*",
+            "x-api-key",
+            "anthropic-version",
+            "anthropic-auth-token",
+        ],
+        expose_headers=["x-request-id"],
+    )
+
+    # Security: Add security headers
+    @app.middleware("http")
+    async def add_security_headers(request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains"
+        )
+        return response
 
     # Register routes
     app.include_router(router)
