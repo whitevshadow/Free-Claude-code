@@ -1,7 +1,9 @@
 """FastAPI route handlers."""
 
+import json
 import traceback
 import uuid
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
@@ -20,59 +22,44 @@ from .request_utils import get_token_count
 router = APIRouter()
 
 
-SUPPORTED_CLAUDE_MODELS = [
-    ModelResponse(
-        id="claude-opus-4-20250514",
-        display_name="Claude Opus 4",
-        created_at="2025-05-14T00:00:00Z",
-    ),
-    ModelResponse(
-        id="claude-sonnet-4-20250514",
-        display_name="Claude Sonnet 4",
-        created_at="2025-05-14T00:00:00Z",
-    ),
-    ModelResponse(
-        id="claude-haiku-4-20250514",
-        display_name="Claude Haiku 4",
-        created_at="2025-05-14T00:00:00Z",
-    ),
-    ModelResponse(
-        id="claude-3-opus-20240229",
-        display_name="Claude 3 Opus",
-        created_at="2024-02-29T00:00:00Z",
-    ),
-    ModelResponse(
-        id="claude-3-5-sonnet-20241022",
-        display_name="Claude 3.5 Sonnet",
-        created_at="2024-10-22T00:00:00Z",
-    ),
-    ModelResponse(
-        id="claude-3-haiku-20240307",
-        display_name="Claude 3 Haiku",
-        created_at="2024-03-07T00:00:00Z",
-    ),
-    ModelResponse(
-        id="claude-3-5-haiku-20241022",
-        display_name="Claude 3.5 Haiku",
-        created_at="2024-10-22T00:00:00Z",
-    ),
-    # Newer short-form model names used by Claude Code CLI v2.1.119+
-    ModelResponse(
-        id="claude-opus-4-7",
-        display_name="Claude Opus 4.7",
-        created_at="2025-05-14T00:00:00Z",
-    ),
-    ModelResponse(
-        id="claude-sonnet-4-6",
-        display_name="Claude Sonnet 4.6",
-        created_at="2025-05-14T00:00:00Z",
-    ),
-    ModelResponse(
-        id="claude-haiku-4-5",
-        display_name="Claude Haiku 4.5",
-        created_at="2025-05-14T00:00:00Z",
-    ),
-]
+def _load_models_from_config() -> list[ModelResponse]:
+    """Load model list from models_config.json - returns only real NVIDIA NIM model names."""
+    config_path = Path(__file__).parent.parent / "models_config.json"
+    
+    if not config_path.exists():
+        logger.warning(f"models_config.json not found, returning empty model list")
+        return []
+    
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            config = json.load(f)
+        
+        models = []
+        
+        # Load models from each tier - use real model IDs
+        for tier, tier_models in config.get("model_tiers", {}).items():
+            for idx, model_info in enumerate(tier_models):
+                # Use the full model path as the ID (real NVIDIA NIM model)
+                model_id = model_info["model"]
+                # Display name shows model name with tier info
+                display_name = model_info["name"]
+                
+                models.append(ModelResponse(
+                    id=model_id,
+                    display_name=display_name,
+                    created_at="2025-01-01T00:00:00Z",
+                ))
+        
+        logger.info(f"Loaded {len(models)} real NVIDIA NIM models from models_config.json")
+        return models
+        
+    except Exception as e:
+        logger.error(f"Failed to load models_config.json: {e}")
+        return []
+
+
+# Load models at startup
+SUPPORTED_MODELS = _load_models_from_config()
 
 
 def _probe_response(allow: str) -> Response:
@@ -216,12 +203,12 @@ async def probe_health():
 
 @router.get("/v1/models", response_model=ModelsListResponse)
 async def list_models(_auth=Depends(require_api_key)):
-    """List the Claude model ids this proxy advertises for compatibility."""
+    """List all available models from hierarchical configuration."""
     return ModelsListResponse(
-        data=SUPPORTED_CLAUDE_MODELS,
-        first_id=SUPPORTED_CLAUDE_MODELS[0].id if SUPPORTED_CLAUDE_MODELS else None,
+        data=SUPPORTED_MODELS,
+        first_id=SUPPORTED_MODELS[0].id if SUPPORTED_MODELS else None,
         has_more=False,
-        last_id=SUPPORTED_CLAUDE_MODELS[-1].id if SUPPORTED_CLAUDE_MODELS else None,
+        last_id=SUPPORTED_MODELS[-1].id if SUPPORTED_MODELS else None,
     )
 
 

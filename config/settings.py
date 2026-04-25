@@ -1,11 +1,13 @@
 """Centralized configuration using Pydantic Settings."""
 
+import json
 import os
 from collections.abc import Mapping
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from loguru import logger
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -305,30 +307,120 @@ class Settings(BaseSettings):
         """Extract the actual model name from the default model string."""
         return self.model.split("/", 1)[1]
 
-    def resolve_model(self, claude_model_name: str) -> str:
-        """Resolve a Claude model name to the configured provider/model string.
+    def _load_model_config(self) -> dict[str, Any]:
+        """Load hierarchical model configuration from JSON file."""
+        config_path = Path(__file__).parent.parent / "models_config.json"
+        if not config_path.exists():
+            logger.warning(
+                f"models_config.json not found at {config_path}, using env vars only"
+            )
+            return {}
 
-        Classifies the incoming Claude model (opus/sonnet/haiku) and
-        returns the model-specific override if configured, otherwise the fallback MODEL.
+        try:
+            with open(config_path, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"Failed to load models_config.json: {e}")
+            return {}
+
+    def resolve_model(self, claude_model_name: str, attempt: int = 0) -> str:
+        """Resolve a Claude model name to the configured provider/model string with hierarchical fallback.
+
+        Classifies the incoming Claude model (opus/sonnet/haiku) and returns models in priority order.
+        Uses models_config.json for hierarchical fallback, falls back to env vars if JSON not found.
+
+        Args:
+            claude_model_name: The Claude model name (e.g., "claude-opus-4-7")
+            attempt: The attempt number for hierarchical fallback (0-based)
+
+        Returns:
+            provider/model string (e.g., "nvidia_nim/deepseek-ai/deepseek-v4-pro")
         """
         name_lower = claude_model_name.lower()
-        if "opus" in name_lower and self.model_opus is not None:
-            return self.model_opus
-        if "haiku" in name_lower and self.model_haiku is not None:
-            return self.model_haiku
-        if "sonnet" in name_lower and self.model_sonnet is not None:
-            return self.model_sonnet
+
+        # Determine tier
+        if "opus" in name_lower:
+            tier = "opus"
+            env_fallback = self.model_opus
+        elif "haiku" in name_lower:
+            tier = "haiku"
+            env_fallback = self.model_haiku
+        elif "sonnet" in name_lower:
+            tier = "sonnet"
+            env_fallback = self.model_sonnet
+        else:
+            return self.model
+
+        # Try hierarchical config from JSON
+        config = self._load_model_config()
+        if config and "model_tiers" in config:
+            tier_models = config["model_tiers"].get(tier, [])
+            if attempt < len(tier_models):
+                model_info = tier_models[attempt]
+                provider = model_info["provider"]
+                model = model_info["model"]
+                logger.debug(
+                    f"MODEL RESOLUTION: tier={tier}, attempt={attempt}, "
+                    f"using {model_info['name']} ({provider}/{model})"
+                )
+                return f"{provider}/{model}"
+
+        # Fallback to env vars
+        if attempt == 0 and env_fallback is not None:
+            logger.debug(f"MODEL RESOLUTION: using env var for {tier}: {env_fallback}")
+            return env_fallback
+
+        # Final fallback
+        logger.debug(f"MODEL RESOLUTION: using default model: {self.model}")
         return self.model
 
-    def get_fallback_model(self, current_model: str) -> str | None:
-        """Return the next configured fallback tier, or None if none available.
-        Opus -> Sonnet -> Haiku.
+    def get_fallback_model(self, current_model: str, attempt: int = 0) -> str | None:
+        """Return the next model in the hierarchical fallback chain.
+
+        Args:
+            current_model: The current model that failed
+            attempt: The current attempt number
+
+        Returns:
+            Next model to try, or None if exhausted all options
         """
+        # Parse the current model to determine tier
         lower = current_model.lower()
-        if "opus" in lower or "glm" in lower:
+
+        if "opus" in lower or "deepseek-v4" in lower or "qwen3.5-397b" in lower or "mistral-large-3" in lower:
+            tier = "opus"
+        elif "sonnet" in lower or "devstral" in lower or "kimi-k2" in lower or "qwen3-coder" in lower:
+            tier = "sonnet"
+        elif "haiku" in lower or "glm" in lower or "mistral-medium" in lower or "nemotron" in lower:
+            tier = "haiku"
+        else:
+            tier = None
+
+        if tier is None:
+            return None
+
+        # Try next model in the hierarchical list
+        config = self._load_model_config()
+        if config and "model_tiers" in config:
+            tier_models = config["model_tiers"].get(tier, [])
+            next_attempt = attempt + 1
+
+            if next_attempt < len(tier_models):
+                model_info = tier_models[next_attempt]
+                provider = model_info["provider"]
+                model = model_info["model"]
+                logger.info(
+                    f"FALLBACK: {tier} tier attempt {next_attempt}: "
+                    f"switching to {model_info['name']} ({provider}/{model})"
+                )
+                return f"{provider}/{model}"
+
+        # If exhausted current tier, try next tier (Opus -> Sonnet -> Haiku)
+        if tier == "opus":
             return self.model_sonnet or self.model_haiku or self.model
-        if "sonnet" in lower or "kimi" in lower:
+        if tier == "sonnet":
             return self.model_haiku or self.model
+
         return None
 
     @staticmethod
