@@ -3,18 +3,47 @@
 # Or connect via Render Dashboard for auto-deployments
 
 services:
-  # Main API Service
+  # Public Open WebUI Service
   - type: web
     name: free-claude-code
+    runtime: image
+    region: oregon  # Change to: oregon, frankfurt, singapore, etc.
+    plan: starter   # starter ($7/mo) or free (with sleep)
+    image:
+      url: ghcr.io/open-webui/open-webui:main
+
+    envVars:
+      - key: WEBUI_AUTH
+        value: "false"
+      - key: ANTHROPIC_API_BASE_URL
+        value: https://free-claude-code-anuc.onrender.com
+      - key: ANTHROPIC_API_KEY
+        value: root
+      # Open WebUI primarily discovers models through OpenAI-compatible endpoints.
+      - key: OPENAI_API_BASE_URLS
+        value: https://free-claude-code-anuc.onrender.com/v1
+      - key: OPENAI_API_KEYS
+        value: root
+
+    autoDeploy: true
+
+    disk:
+      name: open-webui-data
+      mountPath: /app/backend/data
+      sizeGB: 1
+
+  # Claude-compatible proxy service
+  - type: web
+    name: free-claude-code-anuc
     runtime: docker
     region: oregon  # Change to: oregon, frankfurt, singapore, etc.
     plan: starter   # starter ($7/mo) or free (with sleep)
-    branch: main
+    branch: dev
     dockerfilePath: ./Dockerfile
-    
+
     # Health check configuration
     healthCheckPath: /health
-    
+
     # Environment variables
     envVars:
       # === REQUIRED: Provider API Key (choose ONE) ===
@@ -33,8 +62,7 @@ services:
       
       # === Security (CRITICAL for production!) ===
       - key: ANTHROPIC_AUTH_TOKEN
-        generateValue: true  # Auto-generate secure token
-        # Or set manually in dashboard for consistency
+        value: root
       
       # === CORS Configuration ===
       - key: CORS_ORIGINS
