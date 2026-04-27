@@ -17,7 +17,7 @@ services:
     depends_on:
       - proxy
     expose:
-      - "8080"
+      - "9080"
     environment:
       - WEBUI_AUTH=false
       - ANTHROPIC_API_BASE_URL=http://proxy:8082
