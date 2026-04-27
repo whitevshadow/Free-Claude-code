@@ -1,78 +1,32 @@
 # Render Blueprint for Free Claude Code
 # Deploy with: render deploy -f render.yaml
 # Or connect via Render Dashboard for auto-deployments
+# NOTE: Render Blueprint has no field to enable submodules.
+# Enable "Clone submodules" in each service's Render settings.
 
 services:
-  # Public Open WebUI Service
-  - type: web
-    name: free-claude-code
-    runtime: image
-    region: oregon  # Change to: oregon, frankfurt, singapore, etc.
-    plan: starter   # starter ($7/mo) or free (with sleep)
-    image:
-      url: ghcr.io/open-webui/open-webui:main
-
-    envVars:
-      - key: WEBUI_AUTH
-        value: "false"
-      - key: ANTHROPIC_API_BASE_URL
-        value: https://free-claude-code-anuc.onrender.com
-      - key: ANTHROPIC_API_KEY
-        value: root
-      # Open WebUI primarily discovers models through OpenAI-compatible endpoints.
-      - key: OPENAI_API_BASE_URLS
-        value: https://free-claude-code-anuc.onrender.com/v1
-      - key: OPENAI_API_KEYS
-        value: root
-
-    autoDeploy: true
-
-    disk:
-      name: open-webui-data
-      mountPath: /app/backend/data
-      sizeGB: 1
-
   # Claude-compatible proxy service
   - type: web
     name: free-claude-code-anuc
     runtime: docker
-    region: oregon  # Change to: oregon, frankfurt, singapore, etc.
-    plan: starter   # starter ($7/mo) or free (with sleep)
+    region: oregon
+    plan: starter
     branch: dev
     dockerfilePath: ./Dockerfile
-
-    # Health check configuration
     healthCheckPath: /health
-
-    # Environment variables
     envVars:
-      # === REQUIRED: Provider API Key (choose ONE) ===
+      - key: SERVICE_MODE
+        value: "proxy"
       - key: NVIDIA_NIM_API_KEY
-        sync: false  # Don't sync from parent service (set in dashboard)
-      # - key: OPENROUTER_API_KEY
-      #   sync: false
-      # - key: DEEPSEEK_API_KEY
-      #   sync: false
-      
-      # === Model Configuration ===
-      # Claude aliases and listed provider models are resolved from models_config.json.
-      # MODEL is only the fallback for unknown model names.
+        sync: false
       - key: MODEL
         value: nvidia_nim/qwen/qwen3.5-122b-a10b
-      
-      # === Security (CRITICAL for production!) ===
       - key: ANTHROPIC_AUTH_TOKEN
         value: root
-      
-      # === CORS Configuration ===
       - key: CORS_ORIGINS
-        value: "*"  # Change to your domains: https://app.com,https://api.com
-      
-      # === Performance Tuning ===
+        value: "*"
       - key: PROVIDER_RATE_LIMIT
         value: 40
-      - key: PROVIDER_RATE_WINDOW
-        value: 60
       - key: PROVIDER_MAX_CONCURRENCY
         value: 5
       - key: PROVIDER_MAX_RETRIES
@@ -85,56 +39,46 @@ services:
         value: 1
       - key: HTTP_READ_TIMEOUT
         value: 0
-      - key: HTTP_READ_TIMEOUT_OPUS
-        value: 0
-      - key: HTTP_READ_TIMEOUT_SONNET
-        value: 0
-      - key: HTTP_READ_TIMEOUT_HAIKU
-        value: 0
-      
-      # === Features ===
       - key: ENABLE_CAVEMAN
         value: "true"
       - key: ENABLE_THINKING
         value: "true"
       - key: FALLBACK_ROUTING
         value: "true"
-      
-      # === Server Configuration ===
       - key: HOST
         value: 0.0.0.0
-      # PORT is auto-set by Render
       - key: LOG_FILE
         value: /app/logs/server.log
-    
-    # Auto-deploy on push to main branch
     autoDeploy: true
-    
-    # Disk for logs (optional)
     disk:
       name: logs
       mountPath: /app/logs
       sizeGB: 1
 
-# Optional: Background worker for Discord/Telegram bot
-# Uncomment if using messaging platforms
-# - type: worker
-#   name: free-claude-code-bot
-#   runtime: docker
-#   region: oregon
-#   plan: starter
-#   branch: main
-#   dockerfilePath: ./Dockerfile
-#   dockerCommand: uv run python -m messaging.bot
-#   
-#   envVars:
-#     - fromService:
-#         name: free-claude-code
-#         type: web
-#         envVarKey: NVIDIA_NIM_API_KEY
-#     - key: MESSAGING_PLATFORM
-#       value: discord
-#     - key: DISCORD_BOT_TOKEN
-#       sync: false
-#     - key: ALLOWED_DISCORD_CHANNELS
-#       sync: false
+  # Open WebUI service
+  - type: web
+    name: free-claude-code
+    runtime: docker
+    region: oregon
+    plan: starter
+    branch: dev
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: SERVICE_MODE
+        value: "webui"
+      - key: ANTHROPIC_API_BASE_URL
+        value: https://free-claude-code-anuc.onrender.com
+      - key: ANTHROPIC_API_KEY
+        value: root
+      - key: OPENAI_API_BASE_URLS
+        value: https://free-claude-code-anuc.onrender.com/v1
+      - key: OPENAI_API_KEYS
+        value: root
+      - key: WEBUI_AUTH
+        value: "false"
+    autoDeploy: true
+    disk:
+      name: open-webui-data
+      mountPath: /app/backend/data
+      sizeGB: 1

@@ -1,30 +1,73 @@
-# Use the official uv image with Debian slim
-FROM ghcr.io/astral-sh/uv:debian-slim
+# Stage 1: Build Open WebUI frontend
+FROM node:22-alpine AS webui-frontend
+WORKDIR /app
+COPY open-webui/package*.json ./
+RUN npm ci --force
+COPY open-webui/ .
+RUN npm run build
 
-# Set working directory
+# Stage 2: Final runtime
+FROM python:3.14-slim-bookworm
+
+ENV PYTHONUNBUFFERED=1 \
+    USE_SLIM_DOCKER=true \
+    PORT=8082 \
+    PYTHONPATH=/app/backend
+
+# Install system dependencies for Open WebUI and proxy
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    curl \
+    build-essential \
+    python3-dev \
+    libmariadb-dev \
+    ffmpeg \
+    libsm6 \
+    libxext6 \
+    zstd \
+    netcat-openbsd \
+    jq \
+    pandoc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv package manager
+RUN pip install --no-cache-dir --upgrade pip uv
+
 WORKDIR /app
 
-# Enable bytecode compilation for performance
-ENV UV_COMPILE_BYTECODE=1
+# Install Open WebUI Python dependencies
+COPY open-webui/backend/requirements.txt /tmp/open-webui-requirements.txt
+RUN uv pip install --system -r /tmp/open-webui-requirements.txt
 
-# Copy dependency files first for Docker layer caching
-COPY pyproject.toml uv.lock ./
+# Ensure gunicorn is available for Open WebUI
+RUN uv pip install --system gunicorn
 
-# Explicitly install Python 3.14 as strictly required by pyproject.toml
-RUN uv python install 3.14
+# Copy built frontend from the builder stage
+COPY --from=webui-frontend /app/build ./build
+COPY --from=webui-frontend /app/CHANGELOG.md ./CHANGELOG.md
+COPY --from=webui-frontend /app/package.json ./package.json
 
-# Install dependencies (this caches the layer)
-RUN uv sync --frozen --no-install-project --no-dev
+# Copy Open WebUI source tree (includes backend, frontend source, etc.)
+COPY open-webui/ ./
 
-# Copy the rest of the application code
-COPY . /app
+# Copy Claude Code Proxy sources and install proxy dependencies
+COPY pyproject.toml uv.lock server.py /app/
+COPY api/ /app/api/
+COPY cli/ /app/cli/
+COPY config/ /app/config/
+COPY messaging/ /app/messaging/
+COPY providers/ /app/providers/
+COPY trees/ /app/trees/
+COPY models_config.json /app/models_config.json
+COPY nvidia_nim_models.json /app/nvidia_nim_models.json
+RUN uv pip install --system .
 
-# Sync the project execution entry points
-RUN uv sync --frozen --no-dev
+# Copy and set the entrypoint script
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-# Expose default port
-EXPOSE 8082
+# Expose both common ports (Render will override PORT)
+EXPOSE 8082 3000
 
-# Start the Proxy.
-# Render automatically injects the $PORT env var which pydantic seamlessly overrides 'port' with.
-CMD [".venv/bin/python", "server.py"]
+# Use the unified entrypoint
+CMD ["/entrypoint.sh"]
