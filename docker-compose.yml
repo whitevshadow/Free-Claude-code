@@ -2,8 +2,8 @@ services:
   proxy:
     build: .
     container_name: free-claude-proxy
-    ports:
-      - "8082:8082"
+    expose:
+      - "8082"
     env_file:
       - .env
     environment:
