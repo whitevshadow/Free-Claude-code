@@ -98,6 +98,27 @@ async def test_init_uses_configurable_timeouts():
 
 
 @pytest.mark.asyncio
+async def test_init_zero_read_timeout_disables_read_timeout():
+    """HTTP_READ_TIMEOUT=0 is passed to httpx as no read timeout."""
+    from config.nim import NimSettings
+    from providers.base import ProviderConfig
+
+    config = ProviderConfig(
+        api_key="test_key",
+        base_url="https://test.api.nvidia.com/v1",
+        http_read_timeout=0.0,
+        http_write_timeout=15.0,
+        http_connect_timeout=5.0,
+    )
+    with patch("providers.openai_compat.AsyncOpenAI") as mock_openai:
+        NvidiaNimProvider(config, nim_settings=NimSettings())
+        timeout = mock_openai.call_args[1]["timeout"]
+        assert timeout.read is None
+        assert timeout.write == 15.0
+        assert timeout.connect == 5.0
+
+
+@pytest.mark.asyncio
 async def test_build_request_body(provider_config):
     """Test request body construction."""
     from config.nim import NimSettings

@@ -26,14 +26,10 @@ services:
       #   sync: false
       
       # === Model Configuration ===
+      # Claude aliases and listed provider models are resolved from models_config.json.
+      # MODEL is only the fallback for unknown model names.
       - key: MODEL
-        value: nvidia_nim/moonshotai/kimi-k2-instruct
-      - key: MODEL_OPUS
-        value: nvidia_nim/z-ai/glm-4.7
-      - key: MODEL_SONNET
-        value: nvidia_nim/moonshotai/kimi-k2-instruct
-      - key: MODEL_HAIKU
-        value: nvidia_nim/stepfun-ai/step-3.5-flash
+        value: nvidia_nim/qwen/qwen3.5-122b-a10b
       
       # === Security (CRITICAL for production!) ===
       - key: ANTHROPIC_AUTH_TOKEN
@@ -51,29 +47,37 @@ services:
         value: 60
       - key: PROVIDER_MAX_CONCURRENCY
         value: 5
+      - key: PROVIDER_MAX_RETRIES
+        value: 3
+      - key: PROVIDER_RETRY_BASE_DELAY
+        value: 1
+      - key: PROVIDER_RETRY_MAX_DELAY
+        value: 30
+      - key: PROVIDER_RETRY_JITTER
+        value: 1
       - key: HTTP_READ_TIMEOUT
-        value: 120
+        value: 0
       - key: HTTP_READ_TIMEOUT_OPUS
-        value: 300
+        value: 0
       - key: HTTP_READ_TIMEOUT_SONNET
-        value: 150
+        value: 0
       - key: HTTP_READ_TIMEOUT_HAIKU
-        value: 60
+        value: 0
       
       # === Features ===
       - key: ENABLE_CAVEMAN
-        value: true
+        value: "true"
       - key: ENABLE_THINKING
-        value: true
+        value: "true"
       - key: FALLBACK_ROUTING
-        value: true
+        value: "true"
       
       # === Server Configuration ===
       - key: HOST
         value: 0.0.0.0
       # PORT is auto-set by Render
       - key: LOG_FILE
-        value: server.log
+        value: /app/logs/server.log
     
     # Auto-deploy on push to main branch
     autoDeploy: true

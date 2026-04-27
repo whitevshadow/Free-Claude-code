@@ -94,6 +94,20 @@ class TestSettings:
         settings = Settings()
         assert settings.http_read_timeout == 600.0
 
+    def test_http_read_timeout_zero_disables_read_timeout(self, monkeypatch):
+        """HTTP_READ_TIMEOUT=0 is accepted as no provider read timeout."""
+        from config.settings import Settings
+
+        monkeypatch.setenv("HTTP_READ_TIMEOUT", "0")
+        monkeypatch.setenv("HTTP_READ_TIMEOUT_OPUS", "0")
+        monkeypatch.setenv("HTTP_READ_TIMEOUT_SONNET", "0")
+        monkeypatch.setenv("HTTP_READ_TIMEOUT_HAIKU", "0")
+        settings = Settings()
+        assert settings.http_read_timeout == 0.0
+        assert settings.http_read_timeout_opus == 0.0
+        assert settings.http_read_timeout_sonnet == 0.0
+        assert settings.http_read_timeout_haiku == 0.0
+
     def test_http_write_timeout_from_env(self, monkeypatch):
         """HTTP_WRITE_TIMEOUT env var is loaded into settings."""
         from config.settings import Settings
@@ -109,6 +123,44 @@ class TestSettings:
         monkeypatch.setenv("HTTP_CONNECT_TIMEOUT", "5")
         settings = Settings()
         assert settings.http_connect_timeout == 5.0
+
+    def test_provider_retry_settings_from_env(self, monkeypatch):
+        """Provider retry env vars are loaded into settings."""
+        from config.settings import Settings
+
+        monkeypatch.setenv("PROVIDER_MAX_RETRIES", "4")
+        monkeypatch.setenv("PROVIDER_RETRY_BASE_DELAY", "0.5")
+        monkeypatch.setenv("PROVIDER_RETRY_MAX_DELAY", "20")
+        monkeypatch.setenv("PROVIDER_RETRY_JITTER", "0.25")
+        settings = Settings()
+        assert settings.provider_max_retries == 4
+        assert settings.provider_retry_base_delay == 0.5
+        assert settings.provider_retry_max_delay == 20.0
+        assert settings.provider_retry_jitter == 0.25
+
+    def test_invalid_timeout_rejected(self, monkeypatch):
+        """Timeouts must be positive to avoid broken HTTP clients."""
+        from config.settings import Settings
+
+        monkeypatch.setenv("HTTP_CONNECT_TIMEOUT", "0")
+        with pytest.raises(ValidationError, match="value must be > 0"):
+            Settings()
+
+    def test_negative_read_timeout_rejected(self, monkeypatch):
+        """Read timeouts may be disabled with 0 but not negative values."""
+        from config.settings import Settings
+
+        monkeypatch.setenv("HTTP_READ_TIMEOUT", "-1")
+        with pytest.raises(ValidationError, match="value must be >= 0"):
+            Settings()
+
+    def test_invalid_retry_value_rejected(self, monkeypatch):
+        """Retry tuning values must not be negative."""
+        from config.settings import Settings
+
+        monkeypatch.setenv("PROVIDER_MAX_RETRIES", "-1")
+        with pytest.raises(ValidationError, match="value must be >= 0"):
+            Settings()
 
     def test_enable_thinking_from_env(self, monkeypatch):
         """ENABLE_THINKING env var is loaded into settings."""
@@ -485,6 +537,36 @@ class TestPerModelMapping:
         s.model_opus = "open_router/opus-model"
         assert s.resolve_model("claude-2.1") == "nvidia_nim/fallback-model"
         assert s.resolve_model("some-unknown-model") == "nvidia_nim/fallback-model"
+
+    def test_resolve_model_provider_prefixed_passthrough(self):
+        """Provider-prefixed OpenAI-compatible model ids are preserved."""
+        from config.settings import Settings
+
+        s = Settings()
+        assert (
+            s.resolve_model("open_router/anthropic/claude-3.5-sonnet")
+            == "open_router/anthropic/claude-3.5-sonnet"
+        )
+
+    def test_resolve_model_models_config_id(self):
+        """A model id listed by /v1/models resolves to its configured provider."""
+        from config.settings import Settings
+
+        s = Settings()
+        assert (
+            s.resolve_model("deepseek-ai/deepseek-v4-pro")
+            == "nvidia_nim/deepseek-ai/deepseek-v4-pro"
+        )
+
+    def test_resolve_model_nvidia_catalog_id(self):
+        """A NVIDIA catalog model id resolves to the NIM provider."""
+        from config.settings import Settings
+
+        s = Settings()
+        assert (
+            s.resolve_model("nvidia/llama-3.1-nemotron-70b-instruct")
+            == "nvidia_nim/nvidia/llama-3.1-nemotron-70b-instruct"
+        )
 
     def test_resolve_model_case_insensitive(self):
         """Model classification is case-insensitive."""

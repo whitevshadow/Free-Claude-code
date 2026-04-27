@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import openai
 import pytest
-from httpx import ReadTimeout, Request, Response
+from httpx import ReadTimeout, RemoteProtocolError, Request, Response
 
 from providers.common import append_request_id, get_user_facing_error_message, map_error
 from providers.exceptions import (
@@ -130,6 +130,17 @@ def test_user_facing_message_read_timeout_empty_string():
         message
         == "Provider request timed out after 60s. Increase HTTP_READ_TIMEOUT in .env."
     )
+
+
+def test_user_facing_message_incomplete_chunked_read():
+    """Incomplete chunked streams should be translated into an actionable message."""
+    exc = RemoteProtocolError(
+        "peer closed connection without sending complete message body "
+        "(incomplete chunked read)"
+    )
+    message = get_user_facing_error_message(exc)
+    assert message.startswith("Provider stream closed before completing the response.")
+    assert "PROVIDER_MAX_CONCURRENCY" in message
 
 
 def test_append_request_id_suffix():

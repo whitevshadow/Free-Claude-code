@@ -26,6 +26,7 @@ class NvidiaNimProvider(OpenAICompatibleProvider):
         super().__init__(
             config,
             provider_name="NIM",
+            provider_type="nvidia_nim",
             base_url=config.base_url or NVIDIA_NIM_BASE_URL,
             api_key=config.api_key,
         )

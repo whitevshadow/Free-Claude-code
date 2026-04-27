@@ -25,6 +25,6 @@ RUN uv sync --frozen --no-dev
 # Expose default port
 EXPOSE 8082
 
-# Start the Proxy. 
+# Start the Proxy.
 # Render automatically injects the $PORT env var which pydantic seamlessly overrides 'port' with.
-CMD ["uv", "run", "server.py"]
+CMD [".venv/bin/python", "server.py"]

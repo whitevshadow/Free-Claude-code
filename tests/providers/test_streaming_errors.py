@@ -385,6 +385,35 @@ class TestStreamingExceptionHandling:
         event_text = "".join(events)
         assert "Response" in event_text
 
+    @pytest.mark.asyncio
+    async def test_cross_provider_fallback_is_not_sent_to_current_provider(self):
+        """Fallback models from other providers should not be sent to the wrong base URL."""
+        provider = _make_provider()
+
+        settings = MagicMock()
+        settings.http_read_timeout = 120
+        settings.http_read_timeout_opus = 300
+        settings.http_read_timeout_sonnet = 150
+        settings.http_read_timeout_haiku = 60
+        settings.fallback_routing = True
+        settings.get_fallback_model.return_value = "open_router/test/model"
+        settings.parse_provider_type.side_effect = lambda value: value.split("/", 1)[0]
+        settings.parse_model_name.side_effect = lambda value: value.split("/", 1)[1]
+
+        with (
+            patch("config.settings.get_settings", return_value=settings),
+            patch.object(
+                provider,
+                "_execute_stream_create",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("upstream failed"),
+            ) as mock_create,
+            pytest.raises(RuntimeError, match="upstream failed"),
+        ):
+            await provider._create_stream({"model": "deepseek-ai/deepseek-v4-pro"})
+
+        assert mock_create.await_count == 1
+
 
 class TestProcessToolCall:
     """Tests for _process_tool_call method."""

@@ -14,6 +14,11 @@ from providers.rate_limit import GlobalRateLimiter
 LMSTUDIO_DEFAULT_BASE_URL = "http://localhost:1234/v1"
 
 
+def _read_timeout_value(seconds: float) -> float | None:
+    """Convert configured read timeout seconds to httpx's timeout value."""
+    return None if seconds == 0 else seconds
+
+
 class LMStudioProvider(BaseProvider):
     """LM Studio provider using native Anthropic Messages API endpoint."""
 
@@ -31,14 +36,15 @@ class LMStudioProvider(BaseProvider):
             rate_limit=config.rate_limit,
             rate_window=config.rate_window,
             max_concurrency=config.max_concurrency,
+            namespace="lmstudio",
         )
         self._client = httpx.AsyncClient(
             base_url=self._base_url,
             proxy=config.proxy or None,
             timeout=httpx.Timeout(
-                config.http_read_timeout,
+                _read_timeout_value(config.http_read_timeout),
                 connect=config.http_connect_timeout,
-                read=config.http_read_timeout,
+                read=_read_timeout_value(config.http_read_timeout),
                 write=config.http_write_timeout,
             ),
         )
@@ -96,32 +102,39 @@ class LMStudioProvider(BaseProvider):
                 # We use execute_with_retry around the streaming request context
                 # To do this safely with httpx streaming, we await the chunk stream
 
-                async def _make_request():
+                async def _make_request(**_retry_kwargs: Any):
                     request_obj = self._client.build_request(
                         "POST",
                         "/messages",
                         json=body,
                         headers={"Content-Type": "application/json"},
                     )
-                    return await self._client.send(request_obj, stream=True)
+                    response = await self._client.send(request_obj, stream=True)
+                    if response.status_code == 200:
+                        return response
+
+                    text = await response.aread()
+                    text_message = text.decode("utf-8", errors="replace")
+                    logger.error(
+                        "{}_ERROR:{} HTTP {}: {}",
+                        tag,
+                        req_tag,
+                        response.status_code,
+                        text_message,
+                    )
+                    raise httpx.HTTPStatusError(
+                        f"HTTP {response.status_code}: {text_message}",
+                        request=request_obj,
+                        response=response,
+                    )
 
                 response = await self._global_rate_limiter.execute_with_retry(
-                    _make_request
+                    _make_request,
+                    max_retries=self._config.max_retries,
+                    base_delay=self._config.retry_base_delay,
+                    max_delay=self._config.retry_max_delay,
+                    jitter=self._config.retry_jitter,
                 )
-
-                if response.status_code != 200:
-                    try:
-                        response.raise_for_status()
-                    except httpx.HTTPStatusError as e:
-                        text = await response.aread()
-                        logger.error(
-                            "{}_ERROR:{} HTTP {}: {}",
-                            tag,
-                            req_tag,
-                            response.status_code,
-                            text.decode("utf-8", errors="replace"),
-                        )
-                        raise e
 
                 async for line in response.aiter_lines():
                     if line:

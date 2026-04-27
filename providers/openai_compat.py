@@ -24,6 +24,11 @@ from providers.common import (
 from providers.rate_limit import GlobalRateLimiter
 
 
+def _read_timeout_value(seconds: float) -> float | None:
+    """Convert configured read timeout seconds to httpx's timeout value."""
+    return None if seconds == 0 else seconds
+
+
 class OpenAICompatibleProvider(BaseProvider):
     """Base class for providers using OpenAI-compatible chat completions API."""
 
@@ -32,26 +37,29 @@ class OpenAICompatibleProvider(BaseProvider):
         config: ProviderConfig,
         *,
         provider_name: str,
+        provider_type: str,
         base_url: str,
         api_key: str,
     ):
         super().__init__(config)
         self._provider_name = provider_name
+        self._provider_type = provider_type
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
         self._global_rate_limiter = GlobalRateLimiter.get_instance(
             rate_limit=config.rate_limit,
             rate_window=config.rate_window,
             max_concurrency=config.max_concurrency,
+            namespace=provider_type,
         )
         http_client = None
         if config.proxy:
             http_client = httpx.AsyncClient(
                 proxy=config.proxy,
                 timeout=httpx.Timeout(
-                    config.http_read_timeout,
+                    _read_timeout_value(config.http_read_timeout),
                     connect=config.http_connect_timeout,
-                    read=config.http_read_timeout,
+                    read=_read_timeout_value(config.http_read_timeout),
                     write=config.http_write_timeout,
                 ),
             )
@@ -60,9 +68,9 @@ class OpenAICompatibleProvider(BaseProvider):
             base_url=self._base_url,
             max_retries=0,
             timeout=httpx.Timeout(
-                config.http_read_timeout,
+                _read_timeout_value(config.http_read_timeout),
                 connect=config.http_connect_timeout,
-                read=config.http_read_timeout,
+                read=_read_timeout_value(config.http_read_timeout),
                 write=config.http_write_timeout,
             ),
             http_client=http_client,
@@ -88,6 +96,28 @@ class OpenAICompatibleProvider(BaseProvider):
         """Return a modified request body for one retry, or None."""
         return None
 
+    def _request_timeout(self, read_timeout_s: float) -> httpx.Timeout:
+        """Build a per-request timeout preserving connect/write settings."""
+        return httpx.Timeout(
+            _read_timeout_value(read_timeout_s),
+            connect=self._config.http_connect_timeout,
+            read=_read_timeout_value(read_timeout_s),
+            write=self._config.http_write_timeout,
+        )
+
+    async def _execute_stream_create(self, body: dict, timeout_s: float) -> Any:
+        """Create a provider stream with configured retry/backoff settings."""
+        return await self._global_rate_limiter.execute_with_retry(
+            self._client.chat.completions.create,
+            **body,
+            stream=True,
+            timeout=self._request_timeout(timeout_s),
+            max_retries=self._config.max_retries,
+            base_delay=self._config.retry_base_delay,
+            max_delay=self._config.retry_max_delay,
+            jitter=self._config.retry_jitter,
+        )
+
     async def _create_stream(self, body: dict) -> tuple[Any, dict]:
         """Create a streaming chat completion, optionally retrying once.
 
@@ -112,12 +142,7 @@ class OpenAICompatibleProvider(BaseProvider):
             timeout_s = settings.http_read_timeout
 
         try:
-            stream = await self._global_rate_limiter.execute_with_retry(
-                self._client.chat.completions.create,
-                **body,
-                stream=True,
-                timeout=timeout_s,
-            )
+            stream = await self._execute_stream_create(body, timeout_s)
             return stream, body
         except Exception as error:
             # Standard single retry using potentially modified payload (e.g. stripping kwargs)
@@ -125,12 +150,7 @@ class OpenAICompatibleProvider(BaseProvider):
             if retry_body:
                 try:
                     check_request_body_size(retry_body, retry_body.get("model", ""))
-                    stream = await self._global_rate_limiter.execute_with_retry(
-                        self._client.chat.completions.create,
-                        **retry_body,
-                        stream=True,
-                        timeout=timeout_s,
-                    )
+                    stream = await self._execute_stream_create(retry_body, timeout_s)
                     return stream, retry_body
                 except Exception as inner_error:
                     error = inner_error
@@ -139,6 +159,21 @@ class OpenAICompatibleProvider(BaseProvider):
             if settings.fallback_routing:
                 fallback_model_full = settings.get_fallback_model(model_name)
                 if fallback_model_full:
+                    fallback_provider = settings.parse_provider_type(
+                        fallback_model_full
+                    )
+                    if fallback_provider != self._provider_type:
+                        logger.warning(
+                            "FALLBACK: '{}' failed, but '{}' uses provider '{}' "
+                            "while current stream is provider '{}'; skipping unsafe "
+                            "cross-provider fallback.",
+                            model_name,
+                            fallback_model_full,
+                            fallback_provider,
+                            self._provider_type,
+                        )
+                        raise error
+
                     fallback_model = settings.parse_model_name(fallback_model_full)
                     fallback_body = dict(body)
                     fallback_body["model"] = fallback_model
@@ -156,12 +191,7 @@ class OpenAICompatibleProvider(BaseProvider):
                         fallback_model,
                     )
                     check_request_body_size(fallback_body, fallback_model)
-                    stream = await self._global_rate_limiter.execute_with_retry(
-                        self._client.chat.completions.create,
-                        **fallback_body,
-                        stream=True,
-                        timeout=timeout_s,
-                    )
+                    stream = await self._execute_stream_create(fallback_body, timeout_s)
                     return stream, fallback_body
 
             raise error

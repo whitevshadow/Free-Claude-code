@@ -47,6 +47,7 @@ def test_models_list():
     assert data["has_more"] is False
     ids = [item["id"] for item in data["data"]]
     assert "claude-sonnet-4-20250514" in ids
+    assert "nvidia/llama-3.1-nemotron-70b-instruct" in ids
     assert data["first_id"] == ids[0]
     assert data["last_id"] == ids[-1]
 
@@ -222,6 +223,75 @@ def test_count_tokens_endpoint():
     )
     assert response.status_code == 200
     assert "input_tokens" in response.json()
+
+
+def test_openai_chat_completions_non_stream():
+    """OpenAI chat completions returns OpenAI response shape."""
+
+    async def _mock_openai_response(*args, **kwargs):
+        yield "event: message_start\ndata: {}\n\n"
+        yield (
+            'event: content_block_delta\ndata: {"type":"content_block_delta",'
+            '"delta":{"type":"text_delta","text":"Hello OpenAI"}}\n\n'
+        )
+        yield (
+            'event: message_delta\ndata: {"type":"message_delta",'
+            '"delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":3}}\n\n'
+        )
+        yield 'event: message_stop\ndata: {"type":"message_stop"}\n\n'
+
+    mock_provider.stream_response = _mock_openai_response
+    response = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "claude-sonnet-4-20250514",
+            "messages": [
+                {"role": "system", "content": "You are concise."},
+                {"role": "user", "content": "Hi"},
+            ],
+            "max_tokens": 20,
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["object"] == "chat.completion"
+    assert data["choices"][0]["message"] == {
+        "role": "assistant",
+        "content": "Hello OpenAI",
+    }
+    assert data["choices"][0]["finish_reason"] == "stop"
+    assert data["usage"]["completion_tokens"] == 3
+    mock_provider.stream_response = _mock_stream_response
+
+
+def test_openai_chat_completions_stream():
+    """OpenAI chat completions stream returns OpenAI SSE chunks."""
+
+    async def _mock_openai_stream(*args, **kwargs):
+        yield (
+            'event: content_block_delta\ndata: {"type":"content_block_delta",'
+            '"delta":{"type":"text_delta","text":"chunk"}}\n\n'
+        )
+        yield (
+            'event: message_delta\ndata: {"type":"message_delta",'
+            '"delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":1}}\n\n'
+        )
+
+    mock_provider.stream_response = _mock_openai_stream
+    response = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "claude-3-5-haiku-20241022",
+            "stream": True,
+            "messages": [{"role": "user", "content": "Hi"}],
+        },
+    )
+    assert response.status_code == 200
+    content = b"".join(response.iter_bytes()).decode()
+    assert "chat.completion.chunk" in content
+    assert '"content": "chunk"' in content
+    assert "data: [DONE]" in content
+    mock_provider.stream_response = _mock_stream_response
 
 
 def test_stop_endpoint_no_handler_no_cli_503():

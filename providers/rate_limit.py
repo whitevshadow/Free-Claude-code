@@ -9,6 +9,7 @@ from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from typing import Any, ClassVar, TypeVar
 
+import httpx
 import openai
 from loguru import logger
 
@@ -30,12 +31,10 @@ class GlobalRateLimiter:
     """
 
     _instance: ClassVar[GlobalRateLimiter | None] = None
+    _instances: ClassVar[dict[str, GlobalRateLimiter]] = {}
 
     def __new__(cls, *args: Any, **kwargs: Any) -> GlobalRateLimiter:
-        if cls._instance is not None:
-            return cls._instance
-        instance = super().__new__(cls)
-        return instance
+        return super().__new__(cls)
 
     def __init__(
         self,
@@ -73,6 +72,7 @@ class GlobalRateLimiter:
         rate_limit: int | None = None,
         rate_window: float | None = None,
         max_concurrency: int = 5,
+        namespace: str = "default",
     ) -> GlobalRateLimiter:
         """Get or create the singleton instance.
 
@@ -80,19 +80,23 @@ class GlobalRateLimiter:
             rate_limit: Requests per window (only used on first creation)
             rate_window: Window in seconds (only used on first creation)
             max_concurrency: Max simultaneous open streams (only used on first creation)
+            namespace: Isolates limiter state for independent upstream providers.
         """
-        if cls._instance is None:
-            cls._instance = cls(
+        if namespace not in cls._instances:
+            cls._instances[namespace] = cls(
                 rate_limit=rate_limit or 40,
                 rate_window=rate_window or 60.0,
                 max_concurrency=max_concurrency,
             )
-        return cls._instance
+            if namespace == "default":
+                cls._instance = cls._instances[namespace]
+        return cls._instances[namespace]
 
     @classmethod
     def reset_instance(cls) -> None:
         """Reset singleton (for testing)."""
         cls._instance = None
+        cls._instances = {}
 
     async def wait_if_blocked(self) -> bool:
         """
@@ -163,6 +167,50 @@ class GlobalRateLimiter:
         """Get remaining reactive wait time in seconds."""
         return max(0.0, self._blocked_until - time.monotonic())
 
+    @staticmethod
+    def _status_code(exc: Exception) -> int | None:
+        """Return an upstream status code when the exception carries one."""
+        status = getattr(exc, "status_code", None)
+        if isinstance(status, int):
+            return status
+        response = getattr(exc, "response", None)
+        response_status = getattr(response, "status_code", None)
+        return response_status if isinstance(response_status, int) else None
+
+    @classmethod
+    def _is_retryable(cls, exc: Exception) -> bool:
+        """Return whether a provider call failed with a transient condition."""
+        if isinstance(exc, openai.RateLimitError):
+            return True
+
+        status_code = cls._status_code(exc)
+        if status_code in (408, 409, 425, 429, 500, 502, 503, 504, 529):
+            return True
+
+        return isinstance(
+            exc,
+            (
+                httpx.TimeoutException,
+                httpx.TransportError,
+                openai.APITimeoutError,
+                openai.APIConnectionError,
+                openai.InternalServerError,
+            ),
+        )
+
+    @staticmethod
+    def _retry_after(exc: Exception) -> float | None:
+        """Return Retry-After seconds from an upstream response, if present."""
+        response = getattr(exc, "response", None)
+        if response is None:
+            return None
+        raw = getattr(response, "headers", {}).get("retry-after")
+        if not raw:
+            return None
+        with contextlib.suppress(ValueError, TypeError):
+            return float(raw)
+        return None
+
     @asynccontextmanager
     async def concurrency_slot(self) -> AsyncIterator[None]:
         """Async context manager that holds one concurrency slot for a stream.
@@ -185,12 +233,12 @@ class GlobalRateLimiter:
         jitter: float = 2.0,
         **kwargs: Any,
     ) -> Any:
-        """Execute an async callable with rate limiting and retry on 429.
+        """Execute an async callable with rate limiting and transient retries.
 
-        Waits for the proactive limiter before each attempt. On 429, applies
-        exponential backoff with jitter before retrying. Reads the Retry-After
-        header from the upstream response when available so we wait exactly as
-        long as the provider requests.
+        Waits for the proactive limiter before each attempt. Retries rate limits,
+        request timeouts, transport failures, and upstream 5xx/529 responses with
+        exponential backoff and jitter. Reads Retry-After when available so we wait
+        as long as the provider requests.
 
         Args:
             fn: Async callable to execute.
@@ -212,37 +260,47 @@ class GlobalRateLimiter:
 
             try:
                 return await fn(*args, **kwargs)
-            except openai.RateLimitError as e:
+            except Exception as e:
+                if not self._is_retryable(e):
+                    raise
+
                 last_exc = e
                 if attempt >= max_retries:
                     logger.warning(
-                        f"Rate limit retry exhausted after {max_retries} retries"
+                        "Provider retry exhausted after {} retries for {}",
+                        max_retries,
+                        type(e).__name__,
                     )
                     break
 
-                # Try to read Retry-After header from the upstream response
-                retry_after: float | None = None
-                response = getattr(e, "response", None)
-                if response is not None:
-                    raw = getattr(response, "headers", {}).get("retry-after")
-                    if raw:
-                        with contextlib.suppress(ValueError, TypeError):
-                            retry_after = float(raw)
-
+                retry_after = self._retry_after(e)
                 if retry_after is not None:
                     delay = min(retry_after + random.uniform(0, jitter), max_delay)
                     logger.warning(
-                        f"Rate limited (429), attempt {attempt + 1}/{max_retries + 1}. "
-                        f"Retry-After={retry_after:.0f}s — waiting {delay:.1f}s..."
+                        "Provider retryable error {} (status={}), attempt {}/{}. "
+                        "Retry-After={:.0f}s; waiting {:.1f}s...",
+                        type(e).__name__,
+                        self._status_code(e),
+                        attempt + 1,
+                        max_retries + 1,
+                        retry_after,
+                        delay,
                     )
                 else:
                     delay = min(base_delay * (2**attempt), max_delay)
                     delay += random.uniform(0, jitter)
                     logger.warning(
-                        f"Rate limited (429), attempt {attempt + 1}/{max_retries + 1}. "
-                        f"Retrying in {delay:.1f}s..."
+                        "Provider retryable error {} (status={}), attempt {}/{}. "
+                        "Retrying in {:.1f}s...",
+                        type(e).__name__,
+                        self._status_code(e),
+                        attempt + 1,
+                        max_retries + 1,
+                        delay,
                     )
-                self.set_blocked(delay)
+
+                if self._status_code(e) == 429:
+                    self.set_blocked(delay)
                 await asyncio.sleep(delay)
 
         assert last_exc is not None

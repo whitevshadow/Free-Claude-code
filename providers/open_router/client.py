@@ -19,6 +19,7 @@ class OpenRouterProvider(OpenAICompatibleProvider):
         super().__init__(
             config,
             provider_name="OPENROUTER",
+            provider_type="open_router",
             base_url=config.base_url or OPENROUTER_BASE_URL,
             api_key=config.api_key,
         )

@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   proxy:
     build: .
@@ -10,4 +8,23 @@ services:
       - .env
     environment:
       - HOST=0.0.0.0
+      - ANTHROPIC_AUTH_TOKEN=root
     restart: unless-stopped
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    depends_on:
+      - proxy
+    ports:
+      - "3000:8080"
+    environment:
+      - WEBUI_AUTH=false
+      - ANTHROPIC_API_BASE_URL=http://proxy:8082
+      - ANTHROPIC_API_KEY=root
+    volumes:
+      - open-webui:/app/backend/data
+    restart: always
+
+volumes:
+  open-webui:

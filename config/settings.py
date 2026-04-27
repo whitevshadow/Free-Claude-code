@@ -132,6 +132,18 @@ class Settings(BaseSettings):
     provider_max_concurrency: int = Field(
         default=5, validation_alias="PROVIDER_MAX_CONCURRENCY"
     )
+    provider_max_retries: int = Field(
+        default=3, validation_alias="PROVIDER_MAX_RETRIES"
+    )
+    provider_retry_base_delay: float = Field(
+        default=1.0, validation_alias="PROVIDER_RETRY_BASE_DELAY"
+    )
+    provider_retry_max_delay: float = Field(
+        default=30.0, validation_alias="PROVIDER_RETRY_MAX_DELAY"
+    )
+    provider_retry_jitter: float = Field(
+        default=1.0, validation_alias="PROVIDER_RETRY_JITTER"
+    )
     enable_thinking: bool = Field(default=True, validation_alias="ENABLE_THINKING")
 
     # ==================== HTTP Client Timeouts ====================
@@ -156,6 +168,7 @@ class Settings(BaseSettings):
     http_connect_timeout: float = Field(
         default=2.0, validation_alias="HTTP_CONNECT_TIMEOUT"
     )
+    log_full_payloads: bool = Field(default=False, validation_alias="LOG_FULL_PAYLOADS")
 
     # ==================== Fast Prefix Detection ====================
     fast_prefix_detection: bool = True
@@ -249,6 +262,43 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
 
+    @field_validator(
+        "provider_rate_limit",
+        "provider_rate_window",
+        "provider_max_concurrency",
+        "http_write_timeout",
+        "http_connect_timeout",
+    )
+    @classmethod
+    def validate_positive_number(cls, v: int | float) -> int | float:
+        if v <= 0:
+            raise ValueError("value must be > 0")
+        return v
+
+    @field_validator(
+        "http_read_timeout",
+        "http_read_timeout_opus",
+        "http_read_timeout_sonnet",
+        "http_read_timeout_haiku",
+    )
+    @classmethod
+    def validate_non_negative_read_timeout(cls, v: int | float) -> int | float:
+        if v < 0:
+            raise ValueError("value must be >= 0")
+        return v
+
+    @field_validator(
+        "provider_max_retries",
+        "provider_retry_base_delay",
+        "provider_retry_max_delay",
+        "provider_retry_jitter",
+    )
+    @classmethod
+    def validate_non_negative_number(cls, v: int | float) -> int | float:
+        if v < 0:
+            raise ValueError("value must be >= 0")
+        return v
+
     @field_validator("whisper_device")
     @classmethod
     def validate_whisper_device(cls, v: str) -> str:
@@ -323,6 +373,29 @@ class Settings(BaseSettings):
             logger.error(f"Failed to load models_config.json: {e}")
             return {}
 
+    def _load_nvidia_model_ids(self) -> set[str]:
+        """Load model IDs from the checked-in NVIDIA NIM catalog."""
+        config_path = Path(__file__).parent.parent / "nvidia_nim_models.json"
+        if not config_path.exists():
+            return set()
+
+        try:
+            with open(config_path, encoding="utf-8") as f:
+                payload = json.load(f)
+        except Exception as e:
+            logger.error(f"Failed to load nvidia_nim_models.json: {e}")
+            return set()
+
+        data = payload.get("data")
+        if not isinstance(data, list):
+            return set()
+
+        model_ids: set[str] = set()
+        for item in data:
+            if isinstance(item, dict) and isinstance(item.get("id"), str):
+                model_ids.add(item["id"])
+        return model_ids
+
     def resolve_model(self, claude_model_name: str, attempt: int = 0) -> str:
         """Resolve a Claude model name to the configured provider/model string with hierarchical fallback.
 
@@ -338,6 +411,31 @@ class Settings(BaseSettings):
         """
         name_lower = claude_model_name.lower()
 
+        valid_providers = (
+            "nvidia_nim",
+            "open_router",
+            "deepseek",
+            "lmstudio",
+            "llamacpp",
+        )
+        if "/" in claude_model_name:
+            maybe_provider = claude_model_name.split("/", 1)[0]
+            if maybe_provider in valid_providers:
+                return claude_model_name
+
+        config = self._load_model_config()
+        for tier_models in config.get("model_tiers", {}).values():
+            for model_info in tier_models:
+                if not isinstance(model_info, dict):
+                    continue
+                provider = model_info.get("provider")
+                model = model_info.get("model")
+                if model == claude_model_name and provider in valid_providers:
+                    return f"{provider}/{model}"
+
+        if claude_model_name in self._load_nvidia_model_ids():
+            return f"nvidia_nim/{claude_model_name}"
+
         # Determine tier
         if "opus" in name_lower:
             tier = "opus"
@@ -351,9 +449,11 @@ class Settings(BaseSettings):
         else:
             return self.model
 
-        # Try hierarchical config from JSON
-        config = self._load_model_config()
-        if config and "model_tiers" in config:
+        if attempt == 0 and env_fallback is not None:
+            logger.debug(f"MODEL RESOLUTION: using env var for {tier}: {env_fallback}")
+            return env_fallback
+
+        if attempt > 0 and config and "model_tiers" in config:
             tier_models = config["model_tiers"].get(tier, [])
             if attempt < len(tier_models):
                 model_info = tier_models[attempt]
@@ -365,12 +465,6 @@ class Settings(BaseSettings):
                 )
                 return f"{provider}/{model}"
 
-        # Fallback to env vars
-        if attempt == 0 and env_fallback is not None:
-            logger.debug(f"MODEL RESOLUTION: using env var for {tier}: {env_fallback}")
-            return env_fallback
-
-        # Final fallback
         logger.debug(f"MODEL RESOLUTION: using default model: {self.model}")
         return self.model
 
@@ -387,11 +481,26 @@ class Settings(BaseSettings):
         # Parse the current model to determine tier
         lower = current_model.lower()
 
-        if "opus" in lower or "deepseek-v4" in lower or "qwen3.5-397b" in lower or "mistral-large-3" in lower:
+        if (
+            "opus" in lower
+            or "deepseek-v4" in lower
+            or "qwen3.5-397b" in lower
+            or "mistral-large-3" in lower
+        ):
             tier = "opus"
-        elif "sonnet" in lower or "devstral" in lower or "kimi-k2" in lower or "qwen3-coder" in lower:
+        elif (
+            "sonnet" in lower
+            or "devstral" in lower
+            or "kimi-k2" in lower
+            or "qwen3-coder" in lower
+        ):
             tier = "sonnet"
-        elif "haiku" in lower or "glm" in lower or "mistral-medium" in lower or "nemotron" in lower:
+        elif (
+            "haiku" in lower
+            or "glm" in lower
+            or "mistral-medium" in lower
+            or "nemotron" in lower
+        ):
             tier = "haiku"
         else:
             tier = None

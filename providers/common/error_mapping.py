@@ -55,6 +55,15 @@ def get_user_facing_error_message(
             return _STATUS_HINTS[status_code]
         return f"{raw} — {_STATUS_HINTS[status_code]}"
 
+    if isinstance(e, httpx.RemoteProtocolError):
+        lowered = str(e).strip().lower()
+        if "incomplete chunked read" in lowered or "peer closed connection" in lowered:
+            return (
+                "Provider stream closed before completing the response. "
+                "Retry the request, reduce PROVIDER_MAX_CONCURRENCY, or switch to a "
+                "more stable model if this repeats."
+            )
+
     message = str(e).strip()
     if message:
         return message

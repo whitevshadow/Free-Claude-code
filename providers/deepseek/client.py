@@ -17,6 +17,7 @@ class DeepSeekProvider(OpenAICompatibleProvider):
         super().__init__(
             config,
             provider_name="DEEPSEEK",
+            provider_type="deepseek",
             base_url=config.base_url or DEEPSEEK_BASE_URL,
             api_key=config.api_key,
         )

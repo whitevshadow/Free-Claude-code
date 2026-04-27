@@ -137,6 +137,19 @@ class TestProviderRateLimiter:
         assert limiter1 is limiter2
 
     @pytest.mark.asyncio
+    async def test_namespaces_have_independent_limiters(self):
+        """Different provider namespaces should not share limiter state."""
+        limiter1 = GlobalRateLimiter.get_instance(
+            rate_limit=10, rate_window=1, namespace="nvidia_nim"
+        )
+        limiter2 = GlobalRateLimiter.get_instance(
+            rate_limit=20, rate_window=2, namespace="open_router"
+        )
+        assert limiter1 is not limiter2
+        assert limiter1._rate_limit == 10
+        assert limiter2._rate_limit == 20
+
+    @pytest.mark.asyncio
     async def test_reset_instance(self):
         """reset_instance should allow creating a new instance."""
         limiter1 = GlobalRateLimiter.get_instance(rate_limit=10, rate_window=1)
@@ -251,6 +264,97 @@ class TestProviderRateLimiter:
         )
         assert result == "ok"
         assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_execute_with_retry_retries_read_timeout(self):
+        """Transient read timeouts are retried."""
+        import httpx
+
+        GlobalRateLimiter.reset_instance()
+        limiter = GlobalRateLimiter.get_instance(rate_limit=100, rate_window=60)
+        call_count = 0
+
+        async def timeout_then_ok():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise httpx.ReadTimeout("timed out")
+            return "ok"
+
+        result = await limiter.execute_with_retry(
+            timeout_then_ok,
+            max_retries=1,
+            base_delay=0.01,
+            max_delay=0.01,
+            jitter=0,
+        )
+        assert result == "ok"
+        assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_execute_with_retry_retries_http_500(self):
+        """Transient 5xx HTTP status errors are retried."""
+        import httpx
+
+        GlobalRateLimiter.reset_instance()
+        limiter = GlobalRateLimiter.get_instance(rate_limit=100, rate_window=60)
+        call_count = 0
+
+        async def fail_then_ok():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                response = httpx.Response(
+                    500, request=httpx.Request("POST", "http://provider.test")
+                )
+                raise httpx.HTTPStatusError(
+                    "server error",
+                    request=response.request,
+                    response=response,
+                )
+            return "ok"
+
+        result = await limiter.execute_with_retry(
+            fail_then_ok,
+            max_retries=1,
+            base_delay=0.01,
+            max_delay=0.01,
+            jitter=0,
+        )
+        assert result == "ok"
+        assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_execute_with_retry_does_not_retry_bad_request(self):
+        """Non-transient 4xx errors are raised immediately."""
+        import httpx
+
+        GlobalRateLimiter.reset_instance()
+        limiter = GlobalRateLimiter.get_instance(rate_limit=100, rate_window=60)
+        call_count = 0
+        response = httpx.Response(
+            400, request=httpx.Request("POST", "http://provider.test")
+        )
+        error = httpx.HTTPStatusError(
+            "bad request",
+            request=response.request,
+            response=response,
+        )
+
+        async def fail():
+            nonlocal call_count
+            call_count += 1
+            raise error
+
+        with pytest.raises(httpx.HTTPStatusError):
+            await limiter.execute_with_retry(
+                fail,
+                max_retries=3,
+                base_delay=0.01,
+                max_delay=0.01,
+                jitter=0,
+            )
+        assert call_count == 1
 
     @pytest.mark.asyncio
     async def test_max_concurrency_zero_raises(self):
