@@ -57,7 +57,6 @@ COPY cli/ /app/cli/
 COPY config/ /app/config/
 COPY messaging/ /app/messaging/
 COPY providers/ /app/providers/
-COPY trees/ /app/trees/
 COPY models_config.json /app/models_config.json
 COPY nvidia_nim_models.json /app/nvidia_nim_models.json
 RUN uv pip install --system .
