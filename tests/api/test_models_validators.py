@@ -93,7 +93,9 @@ def test_messages_request_model_aware_opus_override():
             messages=[Message(role="user", content="hello")],
         )
         assert request.model == "deepseek-ai/deepseek-v4-pro"
-        assert request.resolved_provider_model == "nvidia_nim/deepseek-ai/deepseek-v4-pro"
+        assert (
+            request.resolved_provider_model == "nvidia_nim/deepseek-ai/deepseek-v4-pro"
+        )
         assert request.original_model == "claude-opus-4-20250514"
 
 
@@ -126,9 +128,7 @@ def test_messages_request_model_aware_sonnet_override():
             messages=[Message(role="user", content="hello")],
         )
         assert request.model == "qwen/qwen3.5-122b-a10b"
-        assert (
-            request.resolved_provider_model == "nvidia_nim/qwen/qwen3.5-122b-a10b"
-        )
+        assert request.resolved_provider_model == "nvidia_nim/qwen/qwen3.5-122b-a10b"
 
 
 def test_messages_request_model_fallback_when_not_set():
@@ -147,7 +147,9 @@ def test_messages_request_model_fallback_when_not_set():
             messages=[Message(role="user", content="hello")],
         )
         assert request.model == "deepseek-ai/deepseek-v4-pro"
-        assert request.resolved_provider_model == "nvidia_nim/deepseek-ai/deepseek-v4-pro"
+        assert (
+            request.resolved_provider_model == "nvidia_nim/deepseek-ai/deepseek-v4-pro"
+        )
 
 
 def test_token_count_request_model_aware():

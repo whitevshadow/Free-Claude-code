@@ -428,9 +428,17 @@ class TestPerModelMapping:
 
         s = Settings()
         # Default mapping is nvidia_nim/deepseek-ai/deepseek-v4-pro
-        assert s.resolve_model("claude-opus-4-20250514") == "nvidia_nim/deepseek-ai/deepseek-v4-pro"
-        assert s.resolve_model("claude-3-opus") == "nvidia_nim/deepseek-ai/deepseek-v4-pro"
-        assert s.resolve_model("claude-3-opus-20240229") == "nvidia_nim/deepseek-ai/deepseek-v4-pro"
+        assert (
+            s.resolve_model("claude-opus-4-20250514")
+            == "nvidia_nim/deepseek-ai/deepseek-v4-pro"
+        )
+        assert (
+            s.resolve_model("claude-3-opus") == "nvidia_nim/deepseek-ai/deepseek-v4-pro"
+        )
+        assert (
+            s.resolve_model("claude-3-opus-20240229")
+            == "nvidia_nim/deepseek-ai/deepseek-v4-pro"
+        )
 
     def test_resolve_model_sonnet_override(self):
         """resolve_model returns model_sonnet for sonnet model names."""
@@ -438,8 +446,14 @@ class TestPerModelMapping:
 
         s = Settings()
         # Default mapping is nvidia_nim/qwen/qwen3.5-122b-a10b
-        assert s.resolve_model("claude-sonnet-4-20250514") == "nvidia_nim/qwen/qwen3.5-122b-a10b"
-        assert s.resolve_model("claude-3-5-sonnet-20241022") == "nvidia_nim/qwen/qwen3.5-122b-a10b"
+        assert (
+            s.resolve_model("claude-sonnet-4-20250514")
+            == "nvidia_nim/qwen/qwen3.5-122b-a10b"
+        )
+        assert (
+            s.resolve_model("claude-3-5-sonnet-20241022")
+            == "nvidia_nim/qwen/qwen3.5-122b-a10b"
+        )
 
     def test_resolve_model_haiku_override(self):
         """resolve_model returns model_haiku for haiku model names."""
@@ -457,8 +471,14 @@ class TestPerModelMapping:
 
         s = Settings()
         # Each tier has its own default from models_config.json
-        assert s.resolve_model("claude-opus-4-20250514") == "nvidia_nim/deepseek-ai/deepseek-v4-pro"
-        assert s.resolve_model("claude-sonnet-4-20250514") == "nvidia_nim/qwen/qwen3.5-122b-a10b"
+        assert (
+            s.resolve_model("claude-opus-4-20250514")
+            == "nvidia_nim/deepseek-ai/deepseek-v4-pro"
+        )
+        assert (
+            s.resolve_model("claude-sonnet-4-20250514")
+            == "nvidia_nim/qwen/qwen3.5-122b-a10b"
+        )
         assert s.resolve_model("claude-3-haiku-20240307") == "nvidia_nim/z-ai/glm4.7"
 
     def test_resolve_model_unknown_model_falls_back(self):
@@ -476,7 +496,9 @@ class TestPerModelMapping:
 
         s = Settings()
         # Default mapping is nvidia_nim/deepseek-ai/deepseek-v4-pro
-        assert s.resolve_model("Claude-OPUS-4") == "nvidia_nim/deepseek-ai/deepseek-v4-pro"
+        assert (
+            s.resolve_model("Claude-OPUS-4") == "nvidia_nim/deepseek-ai/deepseek-v4-pro"
+        )
 
     def test_parse_provider_type(self):
         """parse_provider_type extracts provider from model string."""
