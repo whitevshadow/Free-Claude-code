@@ -206,7 +206,14 @@ async def create_message(
                     response_time=end_time - start_time,
                     is_fallback=fallback_used
                 )
-                metrics.record_error(resolved_model, type(e).__name__)
+                # Only record error if one exists
+                if not success:
+                    # If an exception was caught, record its type
+                    exc_type = None
+                    import sys
+                    exc_type, _, _ = sys.exc_info()
+                    if exc_type:
+                        metrics.record_error(resolved_model, exc_type.__name__)
             return StreamingResponse(
                 response,
                 media_type="text/event-stream",
