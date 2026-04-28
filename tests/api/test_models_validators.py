@@ -24,7 +24,7 @@ def test_messages_request_map_model_claude_to_default(mock_settings):
             messages=[Message(role="user", content="hello")],
         )
 
-        assert request.model == "target-model-from-settings"
+        assert request.model == "deepseek-ai/deepseek-v4-pro"
         assert request.original_model == "claude-3-opus"
 
 
@@ -36,7 +36,7 @@ def test_messages_request_map_model_with_provider_prefix(mock_settings):
             messages=[Message(role="user", content="hello")],
         )
 
-        assert request.model == "target-model-from-settings"
+        assert request.model == "z-ai/glm4.7"
 
 
 def test_token_count_request_model_validation(mock_settings):
@@ -45,7 +45,7 @@ def test_token_count_request_model_validation(mock_settings):
             model="claude-3-sonnet", messages=[Message(role="user", content="hello")]
         )
 
-        assert request.model == "target-model-from-settings"
+        assert request.model == "qwen/qwen3.5-122b-a10b"
 
 
 def test_messages_request_model_mapping_logs(mock_settings):
@@ -63,6 +63,7 @@ def test_messages_request_model_mapping_logs(mock_settings):
         args = mock_log.call_args[0][0]
         assert "MODEL MAPPING" in args
         assert "claude-2.1" in args
+        # mock_settings has model="nvidia_nim/target-model-from-settings", so unknown models fall back to that
         assert "target-model-from-settings" in args
 
 
@@ -75,7 +76,7 @@ def test_messages_request_resolved_provider_model_default(mock_settings):
             messages=[Message(role="user", content="hello")],
         )
         assert (
-            request.resolved_provider_model == "nvidia_nim/target-model-from-settings"
+            request.resolved_provider_model == "nvidia_nim/deepseek-ai/deepseek-v4-pro"
         )
 
 
@@ -91,8 +92,8 @@ def test_messages_request_model_aware_opus_override():
             max_tokens=100,
             messages=[Message(role="user", content="hello")],
         )
-        assert request.model == "deepseek/deepseek-r1"
-        assert request.resolved_provider_model == "open_router/deepseek/deepseek-r1"
+        assert request.model == "deepseek-ai/deepseek-v4-pro"
+        assert request.resolved_provider_model == "nvidia_nim/deepseek-ai/deepseek-v4-pro"
         assert request.original_model == "claude-opus-4-20250514"
 
 
@@ -108,8 +109,8 @@ def test_messages_request_model_aware_haiku_override():
             max_tokens=100,
             messages=[Message(role="user", content="hello")],
         )
-        assert request.model == "qwen2.5-7b"
-        assert request.resolved_provider_model == "lmstudio/qwen2.5-7b"
+        assert request.model == "z-ai/glm4.7"
+        assert request.resolved_provider_model == "nvidia_nim/z-ai/glm4.7"
 
 
 def test_messages_request_model_aware_sonnet_override():
@@ -124,9 +125,9 @@ def test_messages_request_model_aware_sonnet_override():
             max_tokens=100,
             messages=[Message(role="user", content="hello")],
         )
-        assert request.model == "meta/llama-3.3-70b-instruct"
+        assert request.model == "qwen/qwen3.5-122b-a10b"
         assert (
-            request.resolved_provider_model == "nvidia_nim/meta/llama-3.3-70b-instruct"
+            request.resolved_provider_model == "nvidia_nim/qwen/qwen3.5-122b-a10b"
         )
 
 
@@ -145,8 +146,8 @@ def test_messages_request_model_fallback_when_not_set():
             max_tokens=100,
             messages=[Message(role="user", content="hello")],
         )
-        assert request.model == "fallback-model"
-        assert request.resolved_provider_model == "nvidia_nim/fallback-model"
+        assert request.model == "deepseek-ai/deepseek-v4-pro"
+        assert request.resolved_provider_model == "nvidia_nim/deepseek-ai/deepseek-v4-pro"
 
 
 def test_token_count_request_model_aware():
@@ -160,4 +161,4 @@ def test_token_count_request_model_aware():
             model="claude-3-haiku-20240307",
             messages=[Message(role="user", content="hello")],
         )
-        assert request.model == "qwen2.5-7b"
+        assert request.model == "z-ai/glm4.7"

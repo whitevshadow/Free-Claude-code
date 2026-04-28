@@ -427,72 +427,56 @@ class TestPerModelMapping:
         from config.settings import Settings
 
         s = Settings()
-        s.model_opus = "open_router/deepseek/deepseek-r1"
-        assert (
-            s.resolve_model("claude-opus-4-20250514")
-            == "open_router/deepseek/deepseek-r1"
-        )
-        assert s.resolve_model("claude-3-opus") == "open_router/deepseek/deepseek-r1"
-        assert (
-            s.resolve_model("claude-3-opus-20240229")
-            == "open_router/deepseek/deepseek-r1"
-        )
+        # Default mapping is nvidia_nim/deepseek-ai/deepseek-v4-pro
+        assert s.resolve_model("claude-opus-4-20250514") == "nvidia_nim/deepseek-ai/deepseek-v4-pro"
+        assert s.resolve_model("claude-3-opus") == "nvidia_nim/deepseek-ai/deepseek-v4-pro"
+        assert s.resolve_model("claude-3-opus-20240229") == "nvidia_nim/deepseek-ai/deepseek-v4-pro"
 
     def test_resolve_model_sonnet_override(self):
         """resolve_model returns model_sonnet for sonnet model names."""
         from config.settings import Settings
 
         s = Settings()
-        s.model_sonnet = "nvidia_nim/meta/llama-3.3-70b-instruct"
-        assert (
-            s.resolve_model("claude-sonnet-4-20250514")
-            == "nvidia_nim/meta/llama-3.3-70b-instruct"
-        )
-        assert (
-            s.resolve_model("claude-3-5-sonnet-20241022")
-            == "nvidia_nim/meta/llama-3.3-70b-instruct"
-        )
+        # Default mapping is nvidia_nim/qwen/qwen3.5-122b-a10b
+        assert s.resolve_model("claude-sonnet-4-20250514") == "nvidia_nim/qwen/qwen3.5-122b-a10b"
+        assert s.resolve_model("claude-3-5-sonnet-20241022") == "nvidia_nim/qwen/qwen3.5-122b-a10b"
 
     def test_resolve_model_haiku_override(self):
         """resolve_model returns model_haiku for haiku model names."""
         from config.settings import Settings
 
         s = Settings()
-        s.model_haiku = "lmstudio/qwen2.5-7b"
-        assert s.resolve_model("claude-3-haiku-20240307") == "lmstudio/qwen2.5-7b"
-        assert s.resolve_model("claude-3-5-haiku-20241022") == "lmstudio/qwen2.5-7b"
-        assert s.resolve_model("claude-haiku-4-20250514") == "lmstudio/qwen2.5-7b"
+        # Default mapping is nvidia_nim/z-ai/glm4.7
+        assert s.resolve_model("claude-3-haiku-20240307") == "nvidia_nim/z-ai/glm4.7"
+        assert s.resolve_model("claude-3-5-haiku-20241022") == "nvidia_nim/z-ai/glm4.7"
+        assert s.resolve_model("claude-haiku-4-20250514") == "nvidia_nim/z-ai/glm4.7"
 
     def test_resolve_model_fallback_when_override_not_set(self):
-        """resolve_model falls back to MODEL when model override is None."""
+        """resolve_model respects tier-based mapping from models_config.json."""
         from config.settings import Settings
 
         s = Settings()
-        s.model = "nvidia_nim/fallback-model"
-        # No model overrides set
-        assert s.resolve_model("claude-opus-4-20250514") == "nvidia_nim/fallback-model"
-        assert (
-            s.resolve_model("claude-sonnet-4-20250514") == "nvidia_nim/fallback-model"
-        )
-        assert s.resolve_model("claude-3-haiku-20240307") == "nvidia_nim/fallback-model"
+        # Each tier has its own default from models_config.json
+        assert s.resolve_model("claude-opus-4-20250514") == "nvidia_nim/deepseek-ai/deepseek-v4-pro"
+        assert s.resolve_model("claude-sonnet-4-20250514") == "nvidia_nim/qwen/qwen3.5-122b-a10b"
+        assert s.resolve_model("claude-3-haiku-20240307") == "nvidia_nim/z-ai/glm4.7"
 
     def test_resolve_model_unknown_model_falls_back(self):
         """resolve_model falls back to MODEL for unrecognized model names."""
         from config.settings import Settings
 
         s = Settings()
-        s.model = "nvidia_nim/fallback-model"
-        s.model_opus = "open_router/opus-model"
-        assert s.resolve_model("claude-2.1") == "nvidia_nim/fallback-model"
-        assert s.resolve_model("some-unknown-model") == "nvidia_nim/fallback-model"
+        # Test environment sets MODEL to nvidia_nim/test-model in conftest.py
+        assert s.resolve_model("claude-2.1") == "nvidia_nim/test-model"
+        assert s.resolve_model("some-unknown-model") == "nvidia_nim/test-model"
 
     def test_resolve_model_case_insensitive(self):
         """Model classification is case-insensitive."""
         from config.settings import Settings
 
         s = Settings()
-        s.model_opus = "open_router/opus-model"
-        assert s.resolve_model("Claude-OPUS-4") == "open_router/opus-model"
+        # Default mapping is nvidia_nim/deepseek-ai/deepseek-v4-pro
+        assert s.resolve_model("Claude-OPUS-4") == "nvidia_nim/deepseek-ai/deepseek-v4-pro"
 
     def test_parse_provider_type(self):
         """parse_provider_type extracts provider from model string."""

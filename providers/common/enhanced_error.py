@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 
 class ErrorContext:
@@ -17,7 +17,7 @@ class ErrorContext:
         self.tier = tier
         self.is_fallback = is_fallback
         self.original_tier = original_tier or tier
-        self.timestamp = datetime.utcnow()
+        self.timestamp = datetime.now(UTC)
 
 
 def get_enhanced_error_response(error: Exception, context: ErrorContext) -> dict:
