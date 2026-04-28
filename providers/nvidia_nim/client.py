@@ -20,146 +20,39 @@ NVIDIA_NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
 
 
 class NvidiaNimProvider(OpenAICompatibleProvider):
-    async def _stream_response_impl(self, request, input_tokens, request_id):
-        """Override to support multi-key retry and failover with first-token timeout.
-        
-        We override _stream_response_impl (not stream_response) to prevent the base class
-        from yielding message_start immediately, which would cause FastAPI to send HTTP 200
-        before we can check if the API responds within the timeout.
-        """
-        import asyncio
-
-        import httpx
-
+    async def _create_stream(self, body: dict) -> tuple[Any, dict]:
+        """Create a NIM stream, trying configured API keys before surfacing errors."""
         from config.settings import get_settings
-        from providers.exceptions import AuthenticationError, RateLimitError
 
         settings = get_settings()
         keys = settings.nvidia_nim_api_keys or [settings.nvidia_nim_api_key]
-        last_error = None
-        max_attempts = 2  # Fail faster per key
-
-        # First-token timeout: abort if no content received within this time
-        # This is critical - API may accept request but model takes forever to start
-        first_token_timeout = settings.first_token_timeout
-        use_timeout = first_token_timeout > 0
-
-        logger.info(
-            f"NIM: Starting request with {len(keys)} API keys available "
-            f"(first_token_timeout={'disabled' if not use_timeout else f'{first_token_timeout}s'})"
-        )
+        last_error: Exception | None = None
 
         for key_index, key in enumerate(keys):
+            self._client.api_key = key
             key_suffix = key[-8:] if len(key) > 8 else key
-            for attempt in range(max_attempts):
-                try:
-                    self._client.api_key = key
-                    logger.info(
-                        f"NIM: Trying key {key_index + 1}/{len(keys)} (***{key_suffix}), "
-                        f"attempt {attempt + 1}/{max_attempts}"
-                    )
+            try:
+                logger.info(
+                    "NIM: Trying API key {}/{} (***{})",
+                    key_index + 1,
+                    len(keys),
+                    key_suffix,
+                )
+                return await super()._create_stream(body)
+            except Exception as error:
+                last_error = error
+                logger.warning(
+                    "NIM: API key {}/{} (***{}) failed with {}: {}",
+                    key_index + 1,
+                    len(keys),
+                    key_suffix,
+                    type(error).__name__,
+                    error,
+                )
 
-                    # Stream with first-token timeout
-                    # Note: We buffer message_start until we confirm API responds
-                    stream = super()._stream_response_impl(
-                        request, input_tokens=input_tokens, request_id=request_id
-                    )
-                    stream_iter = aiter(stream)
-
-                    if use_timeout:
-                        # Get message_start (emitted by base class before API call) but DON'T yield yet
-                        try:
-                            first_chunk = await anext(stream_iter)
-                            
-                            # Now wait for ACTUAL first content chunk from API with timeout
-                            try:
-                                second_chunk = await asyncio.wait_for(
-                                    anext(stream_iter), timeout=first_token_timeout
-                                )
-                                logger.info(
-                                    f"NIM: ✓ First content token received within {first_token_timeout}s with key {key_index + 1}/{len(keys)}"
-                                )
-                                # API responded! Now we can safely yield both chunks
-                                yield first_chunk
-                                yield second_chunk
-                            except TimeoutError as e:
-                                logger.error(
-                                    f"NIM: ✗ First-token timeout after {first_token_timeout}s with key {key_index + 1}/{len(keys)} (***{key_suffix}) - "
-                                    f"Model accepted request but never started responding. This usually means the model is overloaded or stuck."
-                                )
-                                raise httpx.ReadTimeout(
-                                    f"First token timeout after {first_token_timeout}s - model not responding"
-                                ) from e
-                        except StopAsyncIteration:
-                            # No chunks at all
-                            logger.error(f"NIM: ✗ No chunks received from key {key_index + 1}/{len(keys)}")
-                            raise httpx.ReadTimeout("No response chunks received")
-                    else:
-                        # No timeout - stream all chunks normally
-                        first_chunk = await anext(stream_iter)
-                        logger.info(f"NIM: ✓ First chunk received with key {key_index + 1}/{len(keys)}")
-                        yield first_chunk
-
-                    # Continue streaming remaining chunks (model is responding)
-                    async for chunk in stream_iter:
-                        yield chunk
-
-                    logger.info(
-                        f"NIM: Success with key {key_index + 1}/{len(keys)} (***{key_suffix})"
-                    )
-                    return
-
-                except (httpx.ReadTimeout, httpx.ConnectTimeout) as e:
-                    logger.warning(
-                        f"NIM: Timeout with key {key_index + 1}/{len(keys)} (***{key_suffix}), "
-                        f"attempt {attempt + 1}/{max_attempts} - {type(e).__name__}: {e}"
-                    )
-                    last_error = e
-
-                    # On first timeout, immediately try next key (don't retry same key)
-                    if attempt == 0 and key_index < len(keys) - 1:
-                        logger.info("NIM: Fast-failing to next API key due to timeout")
-                        break
-
-                    # Only wait briefly if retrying same key (last key)
-                    if attempt < max_attempts - 1:
-                        await asyncio.sleep(1.0)
-                    continue
-
-                except (AuthenticationError, RateLimitError) as e:
-                    logger.warning(
-                        f"NIM: Auth/Rate error with key {key_index + 1}/{len(keys)} (***{key_suffix}), "
-                        f"switching to next key"
-                    )
-                    last_error = e
-                    break  # Try next key immediately
-
-                except Exception as e:
-                    logger.error(
-                        f"NIM: Unexpected error with key {key_index + 1}/{len(keys)} (***{key_suffix}): "
-                        f"{type(e).__name__}: {e}"
-                    )
-                    last_error = e
-                    break  # Try next key
-
-        # All keys exhausted - provide helpful error message
-        error_msg = f"All {len(keys)} API key(s) failed. Last error: {type(last_error).__name__}: {last_error}"
-
-        # Check if all failures were timeouts
-        if isinstance(last_error, (httpx.ReadTimeout, httpx.ConnectTimeout)):
-            logger.error(
-                f"NIM: {error_msg}\n"
-                f"💡 All keys timed out after {first_token_timeout}s. This suggests:\n"
-                f"   1. The NVIDIA NIM API is experiencing high load or downtime\n"
-                f"   2. The selected model may be overloaded or unavailable\n"
-                f"   3. Consider increasing FIRST_TOKEN_TIMEOUT (current: {first_token_timeout}s) or trying a different model\n"
-                f"   4. Check NVIDIA NIM status: https://build.nvidia.com/explore/discover"
-            )
-        else:
-            logger.error(f"NIM: {error_msg}")
-
-        if last_error:
+        if last_error is not None:
             raise last_error
+        return await super()._create_stream(body)
 
     def __init__(self, config: ProviderConfig, *, nim_settings: NimSettings):
         super().__init__(

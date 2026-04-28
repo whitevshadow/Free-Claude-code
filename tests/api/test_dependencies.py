@@ -22,6 +22,7 @@ def _make_mock_settings(**overrides):
     mock.model = "nvidia_nim/meta/llama3"
     mock.provider_type = "nvidia_nim"
     mock.nvidia_nim_api_key = "test_key"
+    mock.nvidia_nim_base_url = "https://integrate.api.nvidia.com/v1"
     mock.provider_rate_limit = 40
     mock.provider_rate_window = 60
     mock.provider_max_concurrency = 5
@@ -200,6 +201,33 @@ async def test_get_provider_passes_http_timeouts_from_settings():
         assert timeout.read == 600.0
         assert timeout.write == 20.0
         assert timeout.connect == 5.0
+
+
+@pytest.mark.asyncio
+async def test_get_provider_nvidia_nim_uses_provider_backend_url():
+    """NVIDIA NIM uses its backend URL, separate from Anthropic client base URL."""
+    with patch("api.dependencies.get_settings") as mock_settings:
+        mock_settings.return_value = _make_mock_settings(
+            nvidia_nim_base_url="https://custom.nvidia.example/v1"
+        )
+
+        provider = get_provider()
+
+        assert isinstance(provider, NvidiaNimProvider)
+        assert provider._base_url == "https://custom.nvidia.example/v1"
+
+
+@pytest.mark.asyncio
+async def test_get_provider_nvidia_nim_ignores_anthropic_base_url_env(monkeypatch):
+    """ANTHROPIC_BASE_URL is for clients and must not become the NIM backend."""
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://localhost:8082")
+    with patch("api.dependencies.get_settings") as mock_settings:
+        mock_settings.return_value = _make_mock_settings()
+
+        provider = get_provider()
+
+        assert isinstance(provider, NvidiaNimProvider)
+        assert provider._base_url == "https://integrate.api.nvidia.com/v1"
 
 
 @pytest.mark.asyncio

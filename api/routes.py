@@ -190,6 +190,15 @@ async def create_message(
     if not request_data.messages:
         raise InvalidRequestError("messages cannot be empty")
 
+    input_tokens = get_token_count(
+        request_data.messages, request_data.system, request_data.tools
+    )
+    if input_tokens > settings.max_input_tokens:
+        raise InvalidRequestError(
+            f"Input tokens {input_tokens} exceed MAX_INPUT_TOKENS={settings.max_input_tokens}. "
+            "Start a new Claude Code session or reduce context."
+        )
+
     optimized = try_optimizations(request_data, settings)
     if optimized is not None:
         return optimized
@@ -208,9 +217,6 @@ async def create_message(
             )
             provider = get_provider_for_type(provider_type)
 
-            input_tokens = get_token_count(
-                request_data.messages, request_data.system, request_data.tools
-            )
             response_headers.update(
                 {
                     "X-Model-Used": resolved_model,

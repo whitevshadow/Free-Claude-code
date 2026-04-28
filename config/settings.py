@@ -97,6 +97,10 @@ class Settings(BaseSettings):
     nvidia_nim_api_keys: list[str] = Field(
         default_factory=list, validation_alias="NVIDIA_NIM_API_KEYS"
     )
+    nvidia_nim_base_url: str = Field(
+        default="https://integrate.api.nvidia.com/v1",
+        validation_alias="NVIDIA_NIM_BASE_URL",
+    )
 
     @field_validator("nvidia_nim_api_keys", mode="before")
     @classmethod
@@ -153,6 +157,7 @@ class Settings(BaseSettings):
     provider_max_concurrency: int = Field(
         default=1_000_000, validation_alias="PROVIDER_MAX_CONCURRENCY"
     )
+    max_input_tokens: int = Field(default=10000, validation_alias="MAX_INPUT_TOKENS")
     enable_thinking: bool = Field(default=True, validation_alias="ENABLE_THINKING")
 
     # ==================== HTTP Client Timeouts ====================

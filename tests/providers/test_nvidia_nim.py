@@ -1,6 +1,8 @@
+import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import openai
 import pytest
 from httpx import Request, Response
@@ -46,6 +48,15 @@ def _make_bad_request_error(message: str) -> openai.BadRequestError:
     )
     body = {"error": {"message": message, "type": "BadRequestError", "code": 400}}
     return openai.BadRequestError(message, response=response, body=body)
+
+
+def _make_permission_denied_error(message: str) -> openai.PermissionDeniedError:
+    response = Response(
+        status_code=403,
+        request=Request("POST", "https://integrate.api.nvidia.com/v1/chat/completions"),
+    )
+    body = {"status": 403, "title": "Forbidden", "detail": message}
+    return openai.PermissionDeniedError(message, response=response, body=body)
 
 
 @pytest.fixture(autouse=True)
@@ -152,6 +163,132 @@ async def test_build_request_body_omits_reasoning_when_request_disables_thinking
     extra = body.get("extra_body", {})
     assert "chat_template_kwargs" not in extra
     assert "reasoning_budget" not in extra
+
+
+@pytest.mark.asyncio
+async def test_stream_response_yields_message_start_before_upstream_create(
+    nim_provider,
+):
+    """NIM no longer waits for an upstream token before starting Anthropic SSE."""
+    req = MockRequest()
+
+    started = asyncio.Event()
+
+    async def never_create(*args, **kwargs):
+        started.set()
+        await asyncio.Event().wait()
+
+    with patch.object(
+        nim_provider._client.chat.completions,
+        "create",
+        new_callable=AsyncMock,
+        side_effect=never_create,
+    ) as mock_create:
+        stream = nim_provider.stream_response(req)
+        first_event = await asyncio.wait_for(anext(stream), timeout=0.2)
+        await stream.aclose()
+
+    assert "event: message_start" in first_event
+    assert mock_create.await_count == 0
+    assert not started.is_set()
+
+
+@pytest.mark.asyncio
+async def test_stream_response_read_timeout_emits_sse_error(nim_provider):
+    """Upstream timeout is converted to SSE instead of bubbling through FastAPI."""
+    req = MockRequest()
+
+    with patch.object(
+        nim_provider._client.chat.completions,
+        "create",
+        new_callable=AsyncMock,
+        side_effect=httpx.ReadTimeout("model not responding"),
+    ):
+        events = [e async for e in nim_provider.stream_response(req)]
+
+    event_text = "".join(events)
+    assert "model not responding" in event_text
+    assert "event: message_stop" in event_text
+
+
+@pytest.mark.asyncio
+async def test_stream_response_falls_back_after_forbidden_model(nim_provider):
+    """A 403 on the primary NIM model advances through models_config fallbacks."""
+    req = MockRequest(model="deepseek-ai/deepseek-v4-pro")
+
+    mock_chunk = MagicMock()
+    mock_chunk.choices = [
+        MagicMock(
+            delta=MagicMock(content="Recovered", reasoning_content=""),
+            finish_reason="stop",
+        )
+    ]
+    mock_chunk.usage = MagicMock(completion_tokens=5)
+
+    async def mock_stream():
+        yield mock_chunk
+
+    with patch.object(
+        nim_provider._client.chat.completions,
+        "create",
+        new_callable=AsyncMock,
+        side_effect=[
+            _make_permission_denied_error("Authorization failed"),
+            mock_stream(),
+        ],
+    ) as mock_create:
+        events = [e async for e in nim_provider.stream_response(req)]
+
+    assert mock_create.await_count == 2
+    assert (
+        mock_create.await_args_list[0].kwargs["model"] == "deepseek-ai/deepseek-v4-pro"
+    )
+    assert mock_create.await_args_list[1].kwargs["model"] == "deepseek-ai/deepseek-v3.2"
+    assert any("Recovered" in event for event in events)
+    assert any("message_stop" in event for event in events)
+
+
+@pytest.mark.asyncio
+async def test_stream_response_tries_parsed_nim_api_keys(nim_provider):
+    """NIM sends one configured API key at a time, not the comma-separated env value."""
+    req = MockRequest(model="deepseek-ai/deepseek-v4-pro")
+
+    mock_chunk = MagicMock()
+    mock_chunk.choices = [
+        MagicMock(
+            delta=MagicMock(content="OK", reasoning_content=""),
+            finish_reason="stop",
+        )
+    ]
+    mock_chunk.usage = MagicMock(completion_tokens=2)
+
+    async def mock_stream():
+        yield mock_chunk
+
+    with (
+        patch("config.settings.get_settings") as mock_settings,
+        patch.object(
+            nim_provider._client.chat.completions,
+            "create",
+            new_callable=AsyncMock,
+            return_value=mock_stream(),
+        ) as mock_create,
+    ):
+        settings = mock_settings.return_value
+        settings.nvidia_nim_api_key = "key_one,key_two"
+        settings.nvidia_nim_api_keys = ["key_one", "key_two"]
+        settings.fallback_routing = False
+        settings.http_read_timeout_opus = 90.0
+        settings.http_read_timeout_sonnet = 60.0
+        settings.http_read_timeout_haiku = 45.0
+        settings.http_read_timeout = 60.0
+
+        events = [e async for e in nim_provider.stream_response(req)]
+
+    assert mock_create.await_count == 1
+    assert nim_provider._client.api_key == "key_one"
+    assert any("OK" in event for event in events)
+    assert any("message_stop" in event for event in events)
 
 
 @pytest.mark.asyncio

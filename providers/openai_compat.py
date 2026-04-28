@@ -68,6 +68,24 @@ class OpenAICompatibleProvider(BaseProvider):
             http_client=http_client,
         )
 
+    def _provider_type_matches(self, provider_type: str) -> bool:
+        provider_types = {
+            "NIM": "nvidia_nim",
+            "OPENROUTER": "open_router",
+            "DEEPSEEK": "deepseek",
+        }
+        return provider_types.get(self._provider_name) == provider_type
+
+    def _timeout_for_model(self, settings: Any, model: str) -> float:
+        model_lower = model.lower()
+        if "opus" in model_lower or "glm" in model_lower:
+            return settings.http_read_timeout_opus
+        if "sonnet" in model_lower or "kimi" in model_lower:
+            return settings.http_read_timeout_sonnet
+        if "haiku" in model_lower or "step" in model_lower:
+            return settings.http_read_timeout_haiku
+        return settings.http_read_timeout
+
     async def cleanup(self) -> None:
         """Release HTTP client resources."""
         client = getattr(self, "_client", None)
@@ -101,15 +119,7 @@ class OpenAICompatibleProvider(BaseProvider):
 
         # Resolve tier-specific timeout
         settings = get_settings()
-        model_lower = model_name.lower()
-        if "opus" in model_lower or "glm" in model_lower:
-            timeout_s = settings.http_read_timeout_opus
-        elif "sonnet" in model_lower or "kimi" in model_lower:
-            timeout_s = settings.http_read_timeout_sonnet
-        elif "haiku" in model_lower or "step" in model_lower:
-            timeout_s = settings.http_read_timeout_haiku
-        else:
-            timeout_s = settings.http_read_timeout
+        timeout_s = self._timeout_for_model(settings, model_name)
 
         try:
             stream = await self._global_rate_limiter.execute_with_retry(
@@ -135,34 +145,59 @@ class OpenAICompatibleProvider(BaseProvider):
                 except Exception as inner_error:
                     error = inner_error
 
-            # Cross-tier failover
+            # Same-provider failover through the configured tier chain.
             if settings.fallback_routing:
-                fallback_model_full = settings.get_fallback_model(model_name)
-                if fallback_model_full:
+                fallback_attempt = 0
+                attempted_models = {model_name}
+                while fallback_model_full := settings.get_fallback_model(
+                    model_name, fallback_attempt
+                ):
+                    fallback_attempt += 1
+                    fallback_provider = settings.parse_provider_type(
+                        fallback_model_full
+                    )
+                    if not self._provider_type_matches(fallback_provider):
+                        logger.warning(
+                            "FALLBACK: '{}' failed, but next fallback '{}' uses provider '{}'; stopping provider-local fallback.",
+                            model_name,
+                            fallback_model_full,
+                            fallback_provider,
+                        )
+                        break
+
                     fallback_model = settings.parse_model_name(fallback_model_full)
+                    if fallback_model in attempted_models:
+                        continue
+                    attempted_models.add(fallback_model)
+
                     fallback_body = dict(body)
                     fallback_body["model"] = fallback_model
-
-                    # Downgrade timeout for new tier
-                    lowered = fallback_model_full.lower()
-                    if "sonnet" in lowered or "kimi" in lowered:
-                        timeout_s = settings.http_read_timeout_sonnet
-                    elif "haiku" in lowered or "step" in lowered:
-                        timeout_s = settings.http_read_timeout_haiku
+                    fallback_timeout_s = self._timeout_for_model(
+                        settings, fallback_model_full
+                    )
 
                     logger.warning(
                         "FALLBACK: '{}' failed. Failing over to '{}'...",
                         model_name,
                         fallback_model,
                     )
-                    check_request_body_size(fallback_body, fallback_model)
-                    stream = await self._global_rate_limiter.execute_with_retry(
-                        self._client.chat.completions.create,
-                        **fallback_body,
-                        stream=True,
-                        timeout=timeout_s,
-                    )
-                    return stream, fallback_body
+                    try:
+                        check_request_body_size(fallback_body, fallback_model)
+                        stream = await self._global_rate_limiter.execute_with_retry(
+                            self._client.chat.completions.create,
+                            **fallback_body,
+                            stream=True,
+                            timeout=fallback_timeout_s,
+                        )
+                        return stream, fallback_body
+                    except Exception as fallback_error:
+                        error = fallback_error
+                        logger.warning(
+                            "FALLBACK: '{}' failed with {}: {}",
+                            fallback_model,
+                            type(fallback_error).__name__,
+                            fallback_error,
+                        )
 
             raise error
 

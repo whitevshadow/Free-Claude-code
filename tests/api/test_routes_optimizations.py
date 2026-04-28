@@ -103,6 +103,27 @@ def test_create_message_empty_messages_returns_400(client):
     assert "cannot be empty" in data.get("error", {}).get("message", "")
 
 
+def test_create_message_rejects_over_max_input_tokens(client, mock_settings):
+    app.dependency_overrides[get_settings] = lambda: mock_settings
+
+    payload = {
+        "model": "claude-3-sonnet",
+        "max_tokens": 100,
+        "messages": [{"role": "user", "content": "large context"}],
+    }
+
+    with patch("api.routes.get_token_count", return_value=10001):
+        response = client.post("/v1/messages", json=payload)
+
+    assert response.status_code == 400
+    data = response.json()
+    assert data.get("type") == "error"
+    assert data.get("error", {}).get("type") == "invalid_request_error"
+    assert "MAX_INPUT_TOKENS=10000" in data.get("error", {}).get("message", "")
+
+    app.dependency_overrides.clear()
+
+
 def test_count_tokens_endpoint(client):
     payload = {
         "model": "claude-3-sonnet",

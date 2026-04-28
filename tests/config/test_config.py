@@ -78,6 +78,14 @@ class TestSettings:
         settings = Settings()
         assert settings.provider_rate_limit == 20
 
+    def test_max_input_tokens_from_env(self, monkeypatch):
+        """MAX_INPUT_TOKENS env var is loaded into settings."""
+        from config.settings import Settings
+
+        monkeypatch.setenv("MAX_INPUT_TOKENS", "12000")
+        settings = Settings()
+        assert settings.max_input_tokens == 12000
+
     def test_provider_rate_window_from_env(self, monkeypatch):
         """PROVIDER_RATE_WINDOW env var is loaded into settings."""
         from config.settings import Settings
