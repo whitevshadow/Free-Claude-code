@@ -56,7 +56,7 @@ class NvidiaNimProvider(OpenAICompatibleProvider):
             if last_error:
                 raise last_error
             raise RuntimeError("NIM: All API keys failed or timed out.")
-    """NVIDIA NIM provider using official OpenAI client."""
+
 
     def __init__(self, config: ProviderConfig, *, nim_settings: NimSettings):
         super().__init__(
