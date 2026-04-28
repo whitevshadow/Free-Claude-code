@@ -20,7 +20,6 @@ NVIDIA_NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
 
 
 class NvidiaNimProvider(OpenAICompatibleProvider):
-
     async def stream_response(self, request, input_tokens=0, *, request_id=None):
         """Override to support multi-key retry and failover."""
         from config.settings import get_settings
@@ -36,17 +35,24 @@ class NvidiaNimProvider(OpenAICompatibleProvider):
                 try:
                     self._client.api_key = key
                     # Use OpenAICompatibleProvider's streaming logic
-                    async for chunk in super().stream_response(request, input_tokens=input_tokens, request_id=request_id):
+                    async for chunk in super().stream_response(
+                        request, input_tokens=input_tokens, request_id=request_id
+                    ):
                         yield chunk
                     return
                 except (httpx.ReadTimeout, httpx.ConnectTimeout) as e:
-                    logger.warning(f"NIM: Timeout with key {key}, attempt {attempt+1}/{max_attempts}")
+                    logger.warning(
+                        f"NIM: Timeout with key {key}, attempt {attempt + 1}/{max_attempts}"
+                    )
                     last_error = e
                     import asyncio
-                    await asyncio.sleep(2 ** attempt)
+
+                    await asyncio.sleep(2**attempt)
                     continue
                 except (AuthenticationError, RateLimitError) as e:
-                    logger.warning(f"NIM: Auth/Rate error with key {key}, switching to next key")
+                    logger.warning(
+                        f"NIM: Auth/Rate error with key {key}, switching to next key"
+                    )
                     last_error = e
                     break  # Try next key
                 except Exception as e:

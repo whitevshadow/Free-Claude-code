@@ -46,6 +46,7 @@ async def lifespan(app: FastAPI):
 
     # --- P0.1 Startup Validation ---
     from config.startup_validation import validate_startup, ConfigError
+
     settings = get_settings()
     logger.info("Starting Claude Code Proxy...")
     try:

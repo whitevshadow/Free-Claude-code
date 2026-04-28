@@ -22,6 +22,7 @@ from .models.responses import ModelResponse, ModelsListResponse, TokenCountRespo
 from .optimization_handlers import try_optimizations
 from .request_utils import get_token_count
 from .metrics import ModelMetrics
+
 metrics = ModelMetrics()
 
 router = APIRouter()
@@ -30,17 +31,17 @@ router = APIRouter()
 def _load_models_from_config() -> list[ModelResponse]:
     """Load model list from models_config.json - returns only real NVIDIA NIM model names."""
     config_path = Path(__file__).parent.parent / "models_config.json"
-    
+
     if not config_path.exists():
         logger.warning(f"models_config.json not found, returning empty model list")
         return []
-    
+
     try:
         with open(config_path, encoding="utf-8") as f:
             config = json.load(f)
-        
+
         models = []
-        
+
         # Load models from each tier - use real model IDs
         for tier, tier_models in config.get("model_tiers", {}).items():
             for idx, model_info in enumerate(tier_models):
@@ -48,16 +49,20 @@ def _load_models_from_config() -> list[ModelResponse]:
                 model_id = model_info["model"]
                 # Display name shows model name with tier info
                 display_name = model_info["name"]
-                
-                models.append(ModelResponse(
-                    id=model_id,
-                    display_name=display_name,
-                    created_at="2025-01-01T00:00:00Z",
-                ))
-        
-        logger.info(f"Loaded {len(models)} real NVIDIA NIM models from models_config.json")
+
+                models.append(
+                    ModelResponse(
+                        id=model_id,
+                        display_name=display_name,
+                        created_at="2025-01-01T00:00:00Z",
+                    )
+                )
+
+        logger.info(
+            f"Loaded {len(models)} real NVIDIA NIM models from models_config.json"
+        )
         return models
-        
+
     except Exception as e:
         logger.error(f"Failed to load models_config.json: {e}")
         return []
@@ -84,9 +89,10 @@ async def create_message(
 ):
     """Create a message (always streaming)."""
 
-
-    from providers.common.enhanced_error import ErrorContext, get_enhanced_error_response
-
+    from providers.common.enhanced_error import (
+        ErrorContext,
+        get_enhanced_error_response,
+    )
 
     # Track context for error reporting
     context = None
@@ -108,7 +114,9 @@ async def create_message(
         if t in resolved_model.lower():
             tier = t
             break
-    context = ErrorContext(provider=provider_type, model=model_id, tier=tier or "unknown")
+    context = ErrorContext(
+        provider=provider_type, model=model_id, tier=tier or "unknown"
+    )
 
     request_id = f"req_{uuid.uuid4().hex[:12]}"
     logger.info(
@@ -132,17 +140,24 @@ async def create_message(
         try:
             provider_type = Settings.parse_provider_type(resolved_model)
             model_id = Settings.parse_model_name(resolved_model)
-            context = ErrorContext(provider=provider_type, model=model_id, tier=tier or "unknown", is_fallback=fallback_used)
+            context = ErrorContext(
+                provider=provider_type,
+                model=model_id,
+                tier=tier or "unknown",
+                is_fallback=fallback_used,
+            )
             provider = get_provider_for_type(provider_type)
 
             input_tokens = get_token_count(
                 request_data.messages, request_data.system, request_data.tools
             )
-            response_headers.update({
-                "X-Model-Used": resolved_model,
-                "X-Was-Fallback": str(fallback_used),
-                "X-Requested-Tier": tier or "unknown",
-            })
+            response_headers.update(
+                {
+                    "X-Model-Used": resolved_model,
+                    "X-Was-Fallback": str(fallback_used),
+                    "X-Requested-Tier": tier or "unknown",
+                }
+            )
             if fallback_used:
                 response_headers["X-Fallback-Reason"] = fallback_reason or ""
 
@@ -167,7 +182,9 @@ async def create_message(
                     continue
                 # No more fallbacks
                 if context is None:
-                    context = ErrorContext(provider="unknown", model="unknown", tier="unknown")
+                    context = ErrorContext(
+                        provider="unknown", model="unknown", tier="unknown"
+                    )
                 raise HTTPException(
                     status_code=getattr(e, "status_code", 500),
                     detail=get_enhanced_error_response(e, context),
@@ -175,7 +192,9 @@ async def create_message(
             except Exception as e:
                 logger.error(f"Error: {e!s}\n{traceback.format_exc()}")
                 if context is None:
-                    context = ErrorContext(provider="unknown", model="unknown", tier="unknown")
+                    context = ErrorContext(
+                        provider="unknown", model="unknown", tier="unknown"
+                    )
                 raise HTTPException(
                     status_code=getattr(e, "status_code", 500),
                     detail=get_enhanced_error_response(e, context),
@@ -204,13 +223,14 @@ async def create_message(
                     model=resolved_model,
                     success=success,
                     response_time=end_time - start_time,
-                    is_fallback=fallback_used
+                    is_fallback=fallback_used,
                 )
                 # Only record error if one exists
                 if not success:
                     # If an exception was caught, record its type
                     exc_type = None
                     import sys
+
                     exc_type, _, _ = sys.exc_info()
                     if exc_type:
                         metrics.record_error(resolved_model, exc_type.__name__)
@@ -231,7 +251,9 @@ async def create_message(
                 continue
             # No more fallbacks
             if context is None:
-                context = ErrorContext(provider="unknown", model="unknown", tier="unknown")
+                context = ErrorContext(
+                    provider="unknown", model="unknown", tier="unknown"
+                )
             raise HTTPException(
                 status_code=getattr(e, "status_code", 500),
                 detail=get_enhanced_error_response(e, context),
@@ -239,7 +261,9 @@ async def create_message(
         except Exception as e:
             logger.error(f"Error: {e!s}\n{traceback.format_exc()}")
             if context is None:
-                context = ErrorContext(provider="unknown", model="unknown", tier="unknown")
+                context = ErrorContext(
+                    provider="unknown", model="unknown", tier="unknown"
+                )
             raise HTTPException(
                 status_code=getattr(e, "status_code", 500),
                 detail=get_enhanced_error_response(e, context),
@@ -324,13 +348,13 @@ async def health_check():
     health = {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
-        "checks": {}
+        "checks": {},
     }
     settings = get_settings()
     # Check 1: API Key presence
     health["checks"]["nvidia_api_key"] = {
         "present": bool(settings.nvidia_nim_api_key),
-        "status": "ok" if settings.nvidia_nim_api_key else "error"
+        "status": "ok" if settings.nvidia_nim_api_key else "error",
     }
     # Check 2: Config file
     config_path = Path(__file__).parent.parent / "models_config.json"
@@ -343,14 +367,14 @@ async def health_check():
         health["status"] = "degraded"
         config = None
     # Check 3: Model availability per tier
-    for tier in ['opus', 'sonnet', 'haiku']:
+    for tier in ["opus", "sonnet", "haiku"]:
         models = []
         if config and "model_tiers" in config:
             models = config["model_tiers"].get(tier, [])
         health["checks"][f"tier_{tier}"] = {
             "status": "ok" if models else "warning",
             "models_count": len(models),
-            "models": [m["model"] for m in models[:3]] if models else []
+            "models": [m["model"] for m in models[:3]] if models else [],
         }
     return health
 
@@ -390,6 +414,7 @@ async def reload_models(auth: str = None):
     # Simple header-based auth (use proper auth in production)
     ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "changeme")
     from fastapi import Header
+
     # Always ensure auth is a string
     if auth is None:
         auth = ""
@@ -405,14 +430,16 @@ async def reload_models(auth: str = None):
         for tier in ["opus", "sonnet", "haiku"]:
             models = new_config.get("model_tiers", {}).get(tier, [])
             if not models:
-                errors.append(f"No models configured for tier '{tier}' in models_config.json")
+                errors.append(
+                    f"No models configured for tier '{tier}' in models_config.json"
+                )
         # Optionally: update global or cached config here
         logger.info("Models config reloaded successfully")
         return {
             "status": "success" if not errors else "warning",
             "reloaded_at": datetime.utcnow().isoformat(),
             "tiers": list(new_config.get("model_tiers", {}).keys()),
-            "errors": errors
+            "errors": errors,
         }
     except Exception as e:
         logger.error(f"Failed to reload config: {e}")

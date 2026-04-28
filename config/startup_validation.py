@@ -2,8 +2,10 @@ import json
 from pathlib import Path
 from loguru import logger
 
+
 class ConfigError(Exception):
     pass
+
 
 def validate_startup():
     """Run on application startup - fail fast if misconfigured"""
@@ -11,6 +13,7 @@ def validate_startup():
 
     # 1. Validate NVIDIA_NIM_API_KEY
     from .settings import get_settings
+
     settings = get_settings()
     if not settings.nvidia_nim_api_key or not settings.nvidia_nim_api_key.strip():
         errors.append("NVIDIA_NIM_API_KEY not set in .env")
@@ -31,8 +34,10 @@ def validate_startup():
         for tier in ["opus", "sonnet", "haiku"]:
             models = config["model_tiers"].get(tier, [])
             if not models:
-                errors.append(f"No models configured for tier '{tier}' in models_config.json")
-    
+                errors.append(
+                    f"No models configured for tier '{tier}' in models_config.json"
+                )
+
     # 4. Log warnings or raise on critical errors
     if errors:
         for err in errors:
