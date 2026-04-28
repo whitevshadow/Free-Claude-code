@@ -8,9 +8,8 @@ from collections.abc import Awaitable, Callable
 
 from loguru import logger
 
-from providers.common import get_user_facing_error_message
-
 from messaging.trees.data import MessageNode, MessageState, MessageTree
+from providers.common import get_user_facing_error_message
 
 
 class TreeQueueProcessor:

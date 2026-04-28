@@ -12,8 +12,6 @@ import time
 
 from loguru import logger
 
-from providers.common import get_user_facing_error_message
-
 from messaging.commands import (
     handle_clear_command,
     handle_stats_command,
@@ -50,6 +48,7 @@ from messaging.trees.queue_manager import (
     MessageTree,
     TreeQueueManager,
 )
+from providers.common import get_user_facing_error_message
 
 # Status message prefixes used to filter our own messages (ignore echo)
 STATUS_MESSAGE_PREFIXES = ("⏳", "💭", "🔧", "✅", "❌", "🚀", "🤖", "📋", "📊", "🔄")

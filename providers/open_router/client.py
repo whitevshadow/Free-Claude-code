@@ -5,9 +5,8 @@ from typing import Any
 
 from providers.base import ProviderConfig
 from providers.common import SSEBuilder
-from providers.openai_compat import OpenAICompatibleProvider
-
 from providers.open_router.request import build_request_body
+from providers.openai_compat import OpenAICompatibleProvider
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 

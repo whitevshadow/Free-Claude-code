@@ -26,8 +26,8 @@ if TYPE_CHECKING:
     from telegram.ext import ContextTypes
 
 from messaging.models import IncomingMessage
-from messaging.rendering.telegram_markdown import escape_md_v2, format_status
 from messaging.platforms.base import MessagingPlatform
+from messaging.rendering.telegram_markdown import escape_md_v2, format_status
 
 # Optional import - python-telegram-bot may not be installed
 try:

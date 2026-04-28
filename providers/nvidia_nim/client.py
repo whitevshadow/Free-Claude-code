@@ -8,13 +8,12 @@ from loguru import logger
 
 from config.nim import NimSettings
 from providers.base import ProviderConfig
-from providers.openai_compat import OpenAICompatibleProvider
-
 from providers.nvidia_nim.request import (
     build_request_body,
     clone_body_without_chat_template,
     clone_body_without_reasoning_budget,
 )
+from providers.openai_compat import OpenAICompatibleProvider
 
 NVIDIA_NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
 

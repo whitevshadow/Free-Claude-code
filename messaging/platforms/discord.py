@@ -14,11 +14,10 @@ from typing import Any, cast
 
 from loguru import logger
 
-from providers.common import get_user_facing_error_message
-
 from messaging.models import IncomingMessage
-from messaging.rendering.discord_markdown import format_status_discord
 from messaging.platforms.base import MessagingPlatform
+from messaging.rendering.discord_markdown import format_status_discord
+from providers.common import get_user_facing_error_message
 
 AUDIO_EXTENSIONS = (".ogg", ".mp4", ".mp3", ".wav", ".m4a")
 
