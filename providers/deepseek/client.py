@@ -5,7 +5,7 @@ from typing import Any
 from providers.base import ProviderConfig
 from providers.openai_compat import OpenAICompatibleProvider
 
-from .request import build_request_body
+from providers.deepseek.request import build_request_body
 
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 

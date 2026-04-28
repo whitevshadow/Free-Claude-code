@@ -193,7 +193,11 @@ async def create_message(
     input_tokens = get_token_count(
         request_data.messages, request_data.system, request_data.tools
     )
-    if input_tokens > settings.max_input_tokens:
+    if (
+        settings.max_input_tokens is not None
+        and settings.max_input_tokens > 0
+        and input_tokens > settings.max_input_tokens
+    ):
         raise InvalidRequestError(
             f"Input tokens {input_tokens} exceed MAX_INPUT_TOKENS={settings.max_input_tokens}. "
             "Start a new Claude Code session or reduce context."

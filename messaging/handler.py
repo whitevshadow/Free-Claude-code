@@ -14,37 +14,37 @@ from loguru import logger
 
 from providers.common import get_user_facing_error_message
 
-from .commands import (
+from messaging.commands import (
     handle_clear_command,
     handle_stats_command,
     handle_stop_command,
 )
-from .event_parser import parse_cli_event
-from .models import IncomingMessage
-from .platforms.base import MessagingPlatform, SessionManagerInterface
-from .rendering.discord_markdown import (
+from messaging.event_parser import parse_cli_event
+from messaging.models import IncomingMessage
+from messaging.platforms.base import MessagingPlatform, SessionManagerInterface
+from messaging.rendering.discord_markdown import (
     discord_bold,
     discord_code_inline,
     escape_discord,
     escape_discord_code,
     render_markdown_to_discord,
 )
-from .rendering.discord_markdown import (
+from messaging.rendering.discord_markdown import (
     format_status as format_status_discord,  # (emoji, label, suffix)
 )
-from .rendering.telegram_markdown import (
+from messaging.rendering.telegram_markdown import (
     escape_md_v2,
     escape_md_v2_code,
     mdv2_bold,
     mdv2_code_inline,
     render_markdown_to_mdv2,
 )
-from .rendering.telegram_markdown import (
+from messaging.rendering.telegram_markdown import (
     format_status as format_status_telegram,
 )
-from .session import SessionStore
-from .transcript import RenderCtx, TranscriptBuffer
-from .trees.queue_manager import (
+from messaging.session import SessionStore
+from messaging.transcript import RenderCtx, TranscriptBuffer
+from messaging.trees.queue_manager import (
     MessageNode,
     MessageState,
     MessageTree,

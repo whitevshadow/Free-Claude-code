@@ -10,7 +10,7 @@ from loguru import logger
 
 from providers.common import get_user_facing_error_message
 
-from .data import MessageNode, MessageState, MessageTree
+from messaging.trees.data import MessageNode, MessageState, MessageTree
 
 
 class TreeQueueProcessor:

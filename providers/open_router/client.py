@@ -7,7 +7,7 @@ from providers.base import ProviderConfig
 from providers.common import SSEBuilder
 from providers.openai_compat import OpenAICompatibleProvider
 
-from .request import build_request_body
+from providers.open_router.request import build_request_body
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 

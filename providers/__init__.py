@@ -1,8 +1,8 @@
 """Providers package - implement your own provider by extending BaseProvider."""
 
-from .base import BaseProvider, ProviderConfig
-from .deepseek import DeepSeekProvider
-from .exceptions import (
+from providers.base import BaseProvider, ProviderConfig
+from providers.deepseek import DeepSeekProvider
+from providers.exceptions import (
     APIError,
     AuthenticationError,
     InvalidRequestError,
@@ -10,10 +10,10 @@ from .exceptions import (
     ProviderError,
     RateLimitError,
 )
-from .llamacpp import LlamaCppProvider
-from .lmstudio import LMStudioProvider
-from .nvidia_nim import NvidiaNimProvider
-from .open_router import OpenRouterProvider
+from providers.llamacpp import LlamaCppProvider
+from providers.lmstudio import LMStudioProvider
+from providers.nvidia_nim import NvidiaNimProvider
+from providers.open_router import OpenRouterProvider
 
 __all__ = [
     "APIError",

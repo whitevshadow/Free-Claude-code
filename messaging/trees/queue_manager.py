@@ -9,10 +9,10 @@ from collections.abc import Awaitable, Callable
 
 from loguru import logger
 
-from ..models import IncomingMessage
-from .data import MessageNode, MessageState, MessageTree
-from .processor import TreeQueueProcessor
-from .repository import TreeRepository
+from messaging.models import IncomingMessage
+from messaging.trees.data import MessageNode, MessageState, MessageTree
+from messaging.trees.processor import TreeQueueProcessor
+from messaging.trees.repository import TreeRepository
 
 # Backward compatibility: re-export moved classes
 __all__ = [

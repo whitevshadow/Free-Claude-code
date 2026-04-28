@@ -13,7 +13,7 @@ from typing import Any
 
 from loguru import logger
 
-from ..models import IncomingMessage
+from messaging.models import IncomingMessage
 
 
 class _SnapshotQueue:

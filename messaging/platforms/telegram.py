@@ -25,9 +25,9 @@ if TYPE_CHECKING:
     from telegram import Update
     from telegram.ext import ContextTypes
 
-from ..models import IncomingMessage
-from ..rendering.telegram_markdown import escape_md_v2, format_status
-from .base import MessagingPlatform
+from messaging.models import IncomingMessage
+from messaging.rendering.telegram_markdown import escape_md_v2, format_status
+from messaging.platforms.base import MessagingPlatform
 
 # Optional import - python-telegram-bot may not be installed
 try:
@@ -170,7 +170,7 @@ class TelegramPlatform(MessagingPlatform):
                     raise
 
         # Initialize rate limiter
-        from ..limiter import MessagingRateLimiter
+        from messaging.limiter import MessagingRateLimiter
 
         self._limiter = await MessagingRateLimiter.get_instance()
 
@@ -609,7 +609,7 @@ class TelegramPlatform(MessagingPlatform):
             tg_file = await context.bot.get_file(voice.file_id)
             await tg_file.download_to_drive(custom_path=str(tmp_path))
 
-            from ..transcription import transcribe_audio
+            from messaging.transcription import transcribe_audio
 
             transcribed = await asyncio.to_thread(
                 transcribe_audio,

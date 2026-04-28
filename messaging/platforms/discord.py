@@ -16,9 +16,9 @@ from loguru import logger
 
 from providers.common import get_user_facing_error_message
 
-from ..models import IncomingMessage
-from ..rendering.discord_markdown import format_status_discord
-from .base import MessagingPlatform
+from messaging.models import IncomingMessage
+from messaging.rendering.discord_markdown import format_status_discord
+from messaging.platforms.base import MessagingPlatform
 
 AUDIO_EXTENSIONS = (".ogg", ".mp4", ".mp3", ".wav", ".m4a")
 
@@ -210,7 +210,7 @@ class DiscordPlatform(MessagingPlatform):
         try:
             await attachment.save(str(tmp_path))
 
-            from ..transcription import transcribe_audio
+            from messaging.transcription import transcribe_audio
 
             transcribed = await asyncio.to_thread(
                 transcribe_audio,
@@ -340,7 +340,7 @@ class DiscordPlatform(MessagingPlatform):
         if not self.bot_token:
             raise ValueError("DISCORD_BOT_TOKEN is required")
 
-        from ..limiter import MessagingRateLimiter
+        from messaging.limiter import MessagingRateLimiter
 
         self._limiter = await MessagingRateLimiter.get_instance()
 

@@ -86,6 +86,25 @@ def test_create_message_stream():
     assert b"message_start" in content or b"event:" in content
 
 
+def test_create_message_allows_unlimited_input_tokens(monkeypatch):
+    """MAX_INPUT_TOKENS=0 disables the input token cap."""
+    from config.settings import get_settings
+
+    monkeypatch.setenv("MAX_INPUT_TOKENS", "0")
+    get_settings.cache_clear()
+
+    payload = {
+        "model": "claude-3-sonnet",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "max_tokens": 10,
+        "stream": True,
+    }
+    response = client.post("/v1/messages", json=payload)
+    assert response.status_code == 200
+
+    get_settings.cache_clear()
+
+
 def test_model_mapping():
     # Test Haiku mapping
     _stream_response_calls.clear()

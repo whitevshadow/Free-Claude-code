@@ -104,6 +104,7 @@ def test_create_message_empty_messages_returns_400(client):
 
 
 def test_create_message_rejects_over_max_input_tokens(client, mock_settings):
+    mock_settings.max_input_tokens = 10000
     app.dependency_overrides[get_settings] = lambda: mock_settings
 
     payload = {

@@ -157,7 +157,9 @@ class Settings(BaseSettings):
     provider_max_concurrency: int = Field(
         default=1_000_000, validation_alias="PROVIDER_MAX_CONCURRENCY"
     )
-    max_input_tokens: int = Field(default=10000, validation_alias="MAX_INPUT_TOKENS")
+    max_input_tokens: int | None = Field(
+        default=None, validation_alias="MAX_INPUT_TOKENS"
+    )
     enable_thinking: bool = Field(default=True, validation_alias="ENABLE_THINKING")
 
     # ==================== HTTP Client Timeouts ====================
@@ -287,6 +289,13 @@ class Settings(BaseSettings):
     )
     @classmethod
     def parse_optional_str(cls, v: Any) -> Any:
+        if v == "":
+            return None
+        return v
+
+    @field_validator("max_input_tokens", mode="before")
+    @classmethod
+    def parse_optional_max_input_tokens(cls, v: Any) -> Any:
         if v == "":
             return None
         return v

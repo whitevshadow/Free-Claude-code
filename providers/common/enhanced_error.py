@@ -22,7 +22,7 @@ class ErrorContext:
 
 def get_enhanced_error_response(error: Exception, context: ErrorContext) -> dict:
     """Return structured error with full context"""
-    from .error_mapping import get_user_facing_error_message
+    from providers.common.error_mapping import get_user_facing_error_message
 
     base_message = get_user_facing_error_message(error)
     error_type = type(error).__name__

@@ -8,7 +8,7 @@ To add a new platform (e.g. Discord, Slack):
 
 from loguru import logger
 
-from .base import MessagingPlatform
+from messaging.platforms.base import MessagingPlatform
 
 
 def create_messaging_platform(
@@ -30,7 +30,7 @@ def create_messaging_platform(
             logger.info("No Telegram bot token configured, skipping platform setup")
             return None
 
-        from .telegram import TelegramPlatform
+        from messaging.platforms.telegram import TelegramPlatform
 
         return TelegramPlatform(
             bot_token=bot_token,
@@ -43,7 +43,7 @@ def create_messaging_platform(
             logger.info("No Discord bot token configured, skipping platform setup")
             return None
 
-        from .discord import DiscordPlatform
+        from messaging.platforms.discord import DiscordPlatform
 
         return DiscordPlatform(
             bot_token=bot_token,

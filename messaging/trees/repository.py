@@ -5,7 +5,7 @@ Provides data access layer for managing trees and node mappings.
 
 from loguru import logger
 
-from .data import MessageNode, MessageState, MessageTree
+from messaging.trees.data import MessageNode, MessageState, MessageTree
 
 
 class TreeRepository:
@@ -177,7 +177,7 @@ class TreeRepository:
     @classmethod
     def from_dict(cls, data: dict) -> TreeRepository:
         """Deserialize from dictionary."""
-        from .data import MessageTree
+        from messaging.trees.data import MessageTree
 
         repo = cls()
         for root_id, tree_data in data.get("trees", {}).items():

@@ -1,5 +1,5 @@
 """LM Studio provider - Anthropic-compatible local API."""
 
-from .client import LMStudioProvider
+from providers.lmstudio.client import LMStudioProvider
 
 __all__ = ["LMStudioProvider"]

@@ -8,7 +8,7 @@ from typing import (
     runtime_checkable,
 )
 
-from ..models import IncomingMessage
+from messaging.models import IncomingMessage
 
 
 @runtime_checkable
