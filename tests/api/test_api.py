@@ -46,10 +46,10 @@ def test_models_list():
     data = response.json()
     assert data["has_more"] is False
     ids = [item["id"] for item in data["data"]]
-    # Check for new mapped model ids
-    assert "deepseek-ai/deepseek-v4-pro" in ids
-    assert "qwen/qwen3.5-122b-a10b" in ids
-    assert "z-ai/glm4.7" in ids
+    # Check for Claude-compatible model names generated from models_config.json
+    assert "claude-opus-4-20250514" in ids
+    assert "claude-sonnet-4-20250514" in ids
+    assert "claude-haiku-4-20250514" in ids
     assert data["first_id"] == ids[0]
     assert data["last_id"] == ids[-1]
 

@@ -24,13 +24,13 @@ class TestSettings:
         monkeypatch.delenv("HTTP_READ_TIMEOUT", raising=False)
         monkeypatch.setitem(Settings.model_config, "env_file", ())
         settings = Settings()
-        assert settings.model == "nvidia_nim/stepfun-ai/step-3.5-flash"
+        assert settings.model == "nvidia_nim/qwen/qwen3.5-122b-a10b"
         assert isinstance(settings.provider_rate_limit, int)
         assert isinstance(settings.provider_rate_window, int)
         assert isinstance(settings.nim.temperature, float)
         assert isinstance(settings.fast_prefix_detection, bool)
         assert isinstance(settings.enable_thinking, bool)
-        assert settings.http_read_timeout == 120.0
+        assert settings.http_read_timeout == 60.0
 
     def test_get_settings_cached(self):
         """Test get_settings returns cached instance."""

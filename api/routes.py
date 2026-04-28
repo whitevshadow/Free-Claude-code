@@ -41,7 +41,11 @@ def _load_models_from_config() -> list[ModelResponse]:
             config = json.load(f)
 
         claude_models = []
-        tier_versions = {"opus": 7, "sonnet": 6, "haiku": 5}  # Version numbers for aliases
+        tier_versions = {
+            "opus": 7,
+            "sonnet": 6,
+            "haiku": 5,
+        }  # Version numbers for aliases
 
         # Generate Claude model names for each tier
         for tier, models in config.get("model_tiers", {}).items():
@@ -51,7 +55,7 @@ def _load_models_from_config() -> list[ModelResponse]:
             # Primary model (first in tier) - standard naming
             primary_model = models[0]
             primary_name = primary_model["name"]
-            
+
             # claude-{tier}-4-20250514 (standard format)
             claude_models.append(
                 ModelResponse(
@@ -60,7 +64,7 @@ def _load_models_from_config() -> list[ModelResponse]:
                     created_at="2025-01-01T00:00:00Z",
                 )
             )
-            
+
             # claude-{tier}-4-{version} (short alias for compatibility)
             version = tier_versions.get(tier, 1)
             claude_models.append(
@@ -70,7 +74,7 @@ def _load_models_from_config() -> list[ModelResponse]:
                     created_at="2025-01-01T00:00:00Z",
                 )
             )
-            
+
             # Legacy claude-3-{tier} format for backward compatibility
             if tier == "opus":
                 date = "20240229"
@@ -81,10 +85,10 @@ def _load_models_from_config() -> list[ModelResponse]:
             else:  # haiku
                 date = "20240307"
                 version_prefix = "3"
-            
+
             legacy_id = f"claude-{version_prefix}-{tier}-{date}"
             legacy_name = f"Claude {version_prefix} {tier.capitalize()} (Powered by {primary_name})"
-            
+
             claude_models.append(
                 ModelResponse(
                     id=legacy_id,
@@ -93,7 +97,9 @@ def _load_models_from_config() -> list[ModelResponse]:
                 )
             )
 
-        logger.info(f"Loaded {len(claude_models)} Claude-compatible model aliases from models_config.json")
+        logger.info(
+            f"Loaded {len(claude_models)} Claude-compatible model aliases from models_config.json"
+        )
         return claude_models
 
     except Exception as e:

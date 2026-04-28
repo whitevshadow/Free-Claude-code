@@ -125,12 +125,13 @@ class Settings(BaseSettings):
     )
 
     # ==================== Model ====================
-    # All Claude model requests are mapped to this single model (fallback)
+    # Fallback model for unknown Claude model names
+    # Default uses models_config.json default_model (Qwen 3.5 122B)
     # Format: provider_type/model/name
-    model: str = "nvidia_nim/stepfun-ai/step-3.5-flash"
+    model: str = "nvidia_nim/qwen/qwen3.5-122b-a10b"
 
-    # Per-model overrides (optional, falls back to MODEL)
-    # Each can use a different provider
+    # Per-tier overrides (optional, defaults to models_config.json)
+    # Set these env vars only if you want to override the JSON config
     model_opus: str | None = Field(default=None, validation_alias="MODEL_OPUS")
     model_sonnet: str | None = Field(default=None, validation_alias="MODEL_SONNET")
     model_haiku: str | None = Field(default=None, validation_alias="MODEL_HAIKU")
@@ -155,26 +156,34 @@ class Settings(BaseSettings):
     enable_thinking: bool = Field(default=True, validation_alias="ENABLE_THINKING")
 
     # ==================== HTTP Client Timeouts ====================
-    # Fallback/Default timeout if per-tier is unset
-    http_read_timeout: float = Field(
-        default=120.0, validation_alias="HTTP_READ_TIMEOUT"
+    # These timeouts trigger FAST KEY ROTATION in multi-key setup
+    # Shorter timeout = faster switch to next API key on slow response
+    # Example: 60s timeout with 4 keys = ~60s total (not 240s!)
+
+    # First-token timeout: abort if model doesn't start responding
+    # This is CRITICAL - prevents waiting 4+ minutes for unresponsive models
+    first_token_timeout: float = Field(
+        default=45.0, validation_alias="FIRST_TOKEN_TIMEOUT"
     )
-    # Tiered Timeouts
+
+    # Fallback/Default timeout if per-tier is unset
+    http_read_timeout: float = Field(default=60.0, validation_alias="HTTP_READ_TIMEOUT")
+    # Tiered Timeouts (balanced: fast failover + reasonable patience)
     http_read_timeout_opus: float = Field(
-        default=300.0, validation_alias="HTTP_READ_TIMEOUT_OPUS"
+        default=90.0, validation_alias="HTTP_READ_TIMEOUT_OPUS"
     )
     http_read_timeout_sonnet: float = Field(
-        default=150.0, validation_alias="HTTP_READ_TIMEOUT_SONNET"
+        default=60.0, validation_alias="HTTP_READ_TIMEOUT_SONNET"
     )
     http_read_timeout_haiku: float = Field(
-        default=60.0, validation_alias="HTTP_READ_TIMEOUT_HAIKU"
+        default=45.0, validation_alias="HTTP_READ_TIMEOUT_HAIKU"
     )
 
     http_write_timeout: float = Field(
         default=10.0, validation_alias="HTTP_WRITE_TIMEOUT"
     )
     http_connect_timeout: float = Field(
-        default=2.0, validation_alias="HTTP_CONNECT_TIMEOUT"
+        default=5.0, validation_alias="HTTP_CONNECT_TIMEOUT"
     )
 
     # ==================== Fast Prefix Detection ====================
