@@ -29,42 +29,97 @@ router = APIRouter()
 
 
 def _load_models_from_config() -> list[ModelResponse]:
-    """Load model list from models_config.json - returns only real NVIDIA NIM model names."""
+    """Load model list dynamically from models_config.json - returns Claude-compatible model aliases."""
     config_path = Path(__file__).parent.parent / "models_config.json"
 
     if not config_path.exists():
-        logger.warning("models_config.json not found, returning empty model list")
-        return []
+        logger.warning("models_config.json not found, returning default Claude models")
+        return _get_default_claude_models()
 
     try:
         with open(config_path, encoding="utf-8") as f:
             config = json.load(f)
 
-        models = []
+        claude_models = []
+        tier_versions = {"opus": 7, "sonnet": 6, "haiku": 5}  # Version numbers for aliases
 
-        # Load models from each tier - use real model IDs
-        for _tier_models in config.get("model_tiers", {}).values():
-            for _model_info in _tier_models:
-                # Use the full model path as the ID (real NVIDIA NIM model)
-                model_id = _model_info["model"]
-                # Display name shows model name with tier info
-                display_name = _model_info["name"]
-                models.append(
-                    ModelResponse(
-                        id=model_id,
-                        display_name=display_name,
-                        created_at="2025-01-01T00:00:00Z",
-                    )
+        # Generate Claude model names for each tier
+        for tier, models in config.get("model_tiers", {}).items():
+            if not models:
+                continue
+
+            # Primary model (first in tier) - standard naming
+            primary_model = models[0]
+            primary_name = primary_model["name"]
+            
+            # claude-{tier}-4-20250514 (standard format)
+            claude_models.append(
+                ModelResponse(
+                    id=f"claude-{tier}-4-20250514",
+                    display_name=f"Claude {tier.capitalize()} 4 (Powered by {primary_name})",
+                    created_at="2025-01-01T00:00:00Z",
                 )
+            )
+            
+            # claude-{tier}-4-{version} (short alias for compatibility)
+            version = tier_versions.get(tier, 1)
+            claude_models.append(
+                ModelResponse(
+                    id=f"claude-{tier}-4-{version}",
+                    display_name=f"Claude {tier.capitalize()} 4.{version} (Powered by {primary_name})",
+                    created_at="2025-01-01T00:00:00Z",
+                )
+            )
+            
+            # Legacy claude-3-{tier} format for backward compatibility
+            if tier == "opus":
+                date = "20240229"
+                version_prefix = "3"
+            elif tier == "sonnet":
+                date = "20241022"
+                version_prefix = "3.5"
+            else:  # haiku
+                date = "20240307"
+                version_prefix = "3"
+            
+            legacy_id = f"claude-{version_prefix}-{tier}-{date}"
+            legacy_name = f"Claude {version_prefix} {tier.capitalize()} (Powered by {primary_name})"
+            
+            claude_models.append(
+                ModelResponse(
+                    id=legacy_id,
+                    display_name=legacy_name,
+                    created_at=f"{date[:4]}-{date[4:6]}-{date[6:]}T00:00:00Z",
+                )
+            )
 
-        logger.info(
-            f"Loaded {len(models)} real NVIDIA NIM models from models_config.json"
-        )
-        return models
+        logger.info(f"Loaded {len(claude_models)} Claude-compatible model aliases from models_config.json")
+        return claude_models
 
     except Exception as e:
         logger.error(f"Failed to load models_config.json: {e}")
-        return []
+        return _get_default_claude_models()
+
+
+def _get_default_claude_models() -> list[ModelResponse]:
+    """Return hardcoded default Claude models as fallback."""
+    return [
+        ModelResponse(
+            id="claude-opus-4-20250514",
+            display_name="Claude Opus 4",
+            created_at="2025-01-01T00:00:00Z",
+        ),
+        ModelResponse(
+            id="claude-sonnet-4-20250514",
+            display_name="Claude Sonnet 4",
+            created_at="2025-01-01T00:00:00Z",
+        ),
+        ModelResponse(
+            id="claude-haiku-4-20250514",
+            display_name="Claude Haiku 4",
+            created_at="2025-01-01T00:00:00Z",
+        ),
+    ]
 
 
 # Load models at startup
