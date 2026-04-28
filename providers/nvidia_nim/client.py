@@ -20,8 +20,13 @@ NVIDIA_NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
 
 
 class NvidiaNimProvider(OpenAICompatibleProvider):
-    async def stream_response(self, request, input_tokens=0, *, request_id=None):
-        """Override to support multi-key retry and failover with first-token timeout."""
+    async def _stream_response_impl(self, request, input_tokens, request_id):
+        """Override to support multi-key retry and failover with first-token timeout.
+        
+        We override _stream_response_impl (not stream_response) to prevent the base class
+        from yielding message_start immediately, which would cause FastAPI to send HTTP 200
+        before we can check if the API responds within the timeout.
+        """
         import asyncio
 
         import httpx
@@ -37,9 +42,11 @@ class NvidiaNimProvider(OpenAICompatibleProvider):
         # First-token timeout: abort if no content received within this time
         # This is critical - API may accept request but model takes forever to start
         first_token_timeout = settings.first_token_timeout
+        use_timeout = first_token_timeout > 0
 
         logger.info(
-            f"NIM: Starting request with {len(keys)} API keys available (first_token_timeout={first_token_timeout}s)"
+            f"NIM: Starting request with {len(keys)} API keys available "
+            f"(first_token_timeout={'disabled' if not use_timeout else f'{first_token_timeout}s'})"
         )
 
         for key_index, key in enumerate(keys):
@@ -52,27 +59,49 @@ class NvidiaNimProvider(OpenAICompatibleProvider):
                         f"attempt {attempt + 1}/{max_attempts}"
                     )
 
-                    # Stream with first-token timeout using anext()
-                    stream = super().stream_response(
+                    # Stream with first-token timeout
+                    # Note: We buffer message_start until we confirm API responds
+                    stream = super()._stream_response_impl(
                         request, input_tokens=input_tokens, request_id=request_id
                     )
+                    stream_iter = aiter(stream)
 
-                    # Get first chunk with timeout
-                    try:
-                        first_chunk = await asyncio.wait_for(
-                            anext(aiter(stream)), timeout=first_token_timeout
-                        )
-                        logger.info(
-                            f"NIM: First token received within {first_token_timeout}s with key {key_index + 1}/{len(keys)}"
-                        )
+                    if use_timeout:
+                        # Get message_start (emitted by base class before API call) but DON'T yield yet
+                        try:
+                            first_chunk = await anext(stream_iter)
+                            
+                            # Now wait for ACTUAL first content chunk from API with timeout
+                            try:
+                                second_chunk = await asyncio.wait_for(
+                                    anext(stream_iter), timeout=first_token_timeout
+                                )
+                                logger.info(
+                                    f"NIM: ✓ First content token received within {first_token_timeout}s with key {key_index + 1}/{len(keys)}"
+                                )
+                                # API responded! Now we can safely yield both chunks
+                                yield first_chunk
+                                yield second_chunk
+                            except TimeoutError as e:
+                                logger.error(
+                                    f"NIM: ✗ First-token timeout after {first_token_timeout}s with key {key_index + 1}/{len(keys)} (***{key_suffix}) - "
+                                    f"Model accepted request but never started responding. This usually means the model is overloaded or stuck."
+                                )
+                                raise httpx.ReadTimeout(
+                                    f"First token timeout after {first_token_timeout}s - model not responding"
+                                ) from e
+                        except StopAsyncIteration:
+                            # No chunks at all
+                            logger.error(f"NIM: ✗ No chunks received from key {key_index + 1}/{len(keys)}")
+                            raise httpx.ReadTimeout("No response chunks received")
+                    else:
+                        # No timeout - stream all chunks normally
+                        first_chunk = await anext(stream_iter)
+                        logger.info(f"NIM: ✓ First chunk received with key {key_index + 1}/{len(keys)}")
                         yield first_chunk
-                    except TimeoutError as e:
-                        raise httpx.ReadTimeout(
-                            f"First token timeout after {first_token_timeout}s - model not responding"
-                        ) from e
 
-                    # Continue streaming remaining chunks (no timeout - model is responding)
-                    async for chunk in stream:
+                    # Continue streaming remaining chunks (model is responding)
+                    async for chunk in stream_iter:
                         yield chunk
 
                     logger.info(
@@ -113,9 +142,22 @@ class NvidiaNimProvider(OpenAICompatibleProvider):
                     last_error = e
                     break  # Try next key
 
-        logger.error(
-            f"NIM: All {len(keys)} API keys exhausted. Last error: {type(last_error).__name__}: {last_error}"
-        )
+        # All keys exhausted - provide helpful error message
+        error_msg = f"All {len(keys)} API key(s) failed. Last error: {type(last_error).__name__}: {last_error}"
+
+        # Check if all failures were timeouts
+        if isinstance(last_error, (httpx.ReadTimeout, httpx.ConnectTimeout)):
+            logger.error(
+                f"NIM: {error_msg}\n"
+                f"💡 All keys timed out after {first_token_timeout}s. This suggests:\n"
+                f"   1. The NVIDIA NIM API is experiencing high load or downtime\n"
+                f"   2. The selected model may be overloaded or unavailable\n"
+                f"   3. Consider increasing FIRST_TOKEN_TIMEOUT (current: {first_token_timeout}s) or trying a different model\n"
+                f"   4. Check NVIDIA NIM status: https://build.nvidia.com/explore/discover"
+            )
+        else:
+            logger.error(f"NIM: {error_msg}")
+
         if last_error:
             raise last_error
 

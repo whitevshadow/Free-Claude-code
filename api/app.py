@@ -243,6 +243,34 @@ def create_app() -> FastAPI:
             content=exc.to_anthropic_format(),
         )
 
+    # Add specific handler for timeout errors
+    try:
+        import httpx
+
+        @app.exception_handler(httpx.ReadTimeout)
+        async def timeout_handler(request: Request, exc: httpx.ReadTimeout):
+            """Handle timeout errors with helpful context."""
+            logger.error(f"Request timeout: {exc}")
+            return JSONResponse(
+                status_code=504,
+                content={
+                    "type": "error",
+                    "error": {
+                        "type": "timeout_error",
+                        "message": (
+                            "The model failed to respond within the timeout period. "
+                            "This typically indicates the NVIDIA NIM API is experiencing high load or the model is unavailable. "
+                            "You can try: (1) Requesting again with a different model, "
+                            "(2) Increasing FIRST_TOKEN_TIMEOUT in your .env file, or "
+                            "(3) Checking NVIDIA NIM service status at https://build.nvidia.com"
+                        ),
+                    },
+                },
+            )
+
+    except ImportError:
+        pass
+
     @app.exception_handler(Exception)
     async def general_error_handler(request: Request, exc: Exception):
         """Handle general errors and return Anthropic format."""
