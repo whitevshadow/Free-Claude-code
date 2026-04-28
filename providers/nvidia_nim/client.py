@@ -20,6 +20,42 @@ NVIDIA_NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
 
 
 class NvidiaNimProvider(OpenAICompatibleProvider):
+
+        async def stream_response(self, request, input_tokens=0, *, request_id=None):
+            """Override to support multi-key retry and failover."""
+            from config.settings import get_settings
+            import httpx
+            from providers.exceptions import AuthenticationError, RateLimitError
+
+            settings = get_settings()
+            keys = settings.nvidia_nim_api_keys or [settings.nvidia_nim_api_key]
+            last_error = None
+            max_attempts = 3
+            for key in keys:
+                for attempt in range(max_attempts):
+                    try:
+                        self._client.api_key = key
+                        # Use OpenAICompatibleProvider's streaming logic
+                        async for chunk in super().stream_response(request, input_tokens=input_tokens, request_id=request_id):
+                            yield chunk
+                        return
+                    except (httpx.ReadTimeout, httpx.ConnectTimeout) as e:
+                        logger.warning(f"NIM: Timeout with key {key}, attempt {attempt+1}/{max_attempts}")
+                        last_error = e
+                        import asyncio
+                        await asyncio.sleep(2 ** attempt)
+                        continue
+                    except (AuthenticationError, RateLimitError) as e:
+                        logger.warning(f"NIM: Auth/Rate error with key {key}, switching to next key")
+                        last_error = e
+                        break  # Try next key
+                    except Exception as e:
+                        last_error = e
+                        break
+            logger.error(f"NIM: All API keys failed or timed out. Last error: {last_error}")
+            if last_error:
+                raise last_error
+            raise RuntimeError("NIM: All API keys failed or timed out.")
     """NVIDIA NIM provider using official OpenAI client."""
 
     def __init__(self, config: ProviderConfig, *, nim_settings: NimSettings):

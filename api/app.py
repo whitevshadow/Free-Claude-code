@@ -43,8 +43,16 @@ async def _best_effort(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
+
+    # --- P0.1 Startup Validation ---
+    from config.startup_validation import validate_startup, ConfigError
     settings = get_settings()
     logger.info("Starting Claude Code Proxy...")
+    try:
+        validate_startup()
+    except ConfigError as e:
+        logger.error(f"Startup validation failed: {e}")
+        raise
 
     # Initialize messaging platform if configured
     messaging_platform = None

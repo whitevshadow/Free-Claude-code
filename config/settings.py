@@ -94,6 +94,21 @@ class Settings(BaseSettings):
 
     # ==================== NVIDIA NIM Config ====================
     nvidia_nim_api_key: str = ""
+    nvidia_nim_api_keys: list[str] = Field(default_factory=list, validation_alias="NVIDIA_NIM_API_KEYS")
+
+    @field_validator("nvidia_nim_api_keys", mode="before")
+    @classmethod
+    def parse_api_keys(cls, v, info):
+        # info is a ValidationInfo object in Pydantic v2
+        values = info.data if hasattr(info, 'data') else {}
+        if isinstance(v, str) and v.strip():
+            return [k.strip() for k in v.split(",") if k.strip()]
+        api_key = values.get("nvidia_nim_api_key")
+        if api_key and "," in api_key:
+            return [k.strip() for k in api_key.split(",") if k.strip()]
+        if api_key and api_key.strip():
+            return [api_key.strip()]
+        return v or []
 
     # ==================== LM Studio Config ====================
     lm_studio_base_url: str = Field(
@@ -125,13 +140,10 @@ class Settings(BaseSettings):
     llamacpp_proxy: str = Field(default="", validation_alias="LLAMACPP_PROXY")
 
     # ==================== Provider Rate Limiting ====================
-    provider_rate_limit: int = Field(default=40, validation_alias="PROVIDER_RATE_LIMIT")
-    provider_rate_window: int = Field(
-        default=60, validation_alias="PROVIDER_RATE_WINDOW"
-    )
-    provider_max_concurrency: int = Field(
-        default=5, validation_alias="PROVIDER_MAX_CONCURRENCY"
-    )
+    # Effectively unlimited for single-user ultimate access
+    provider_rate_limit: int = Field(default=1_000_000, validation_alias="PROVIDER_RATE_LIMIT")
+    provider_rate_window: int = Field(default=1, validation_alias="PROVIDER_RATE_WINDOW")
+    provider_max_concurrency: int = Field(default=1_000_000, validation_alias="PROVIDER_MAX_CONCURRENCY")
     enable_thinking: bool = Field(default=True, validation_alias="ENABLE_THINKING")
 
     # ==================== HTTP Client Timeouts ====================
@@ -173,7 +185,23 @@ class Settings(BaseSettings):
     enable_caveman: bool = Field(default=False, validation_alias="ENABLE_CAVEMAN")
 
     # ==================== NIM Settings ====================
-    nim: NimSettings = Field(default_factory=NimSettings)
+    nim: NimSettings = Field(default_factory=lambda: NimSettings(
+        temperature=1.0,
+        top_p=1.0,
+        top_k=-1,
+        max_tokens=81920,
+        presence_penalty=0.0,
+        frequency_penalty=0.0,
+        min_p=0.0,
+        repetition_penalty=1.0,
+        seed=None,
+        stop=None,
+        parallel_tool_calls=True,
+        ignore_eos=False,
+        min_tokens=0,
+        chat_template=None,
+        request_id=None,
+    ))
 
     # ==================== Voice Note Transcription ====================
     voice_note_enabled: bool = Field(
