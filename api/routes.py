@@ -5,7 +5,7 @@ import os
 import time
 import traceback
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -346,7 +346,7 @@ async def health_check():
     """Validate all model configurations and API keys"""
     health = {
         "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "checks": {},
     }
     settings = get_settings()
@@ -435,7 +435,7 @@ async def reload_models(auth: str | None = None):
         logger.info("Models config reloaded successfully")
         return {
             "status": "success" if not errors else "warning",
-            "reloaded_at": datetime.utcnow().isoformat(),
+            "reloaded_at": datetime.now(UTC).isoformat(),
             "tiers": list(new_config.get("model_tiers", {}).keys()),
             "errors": errors,
         }
