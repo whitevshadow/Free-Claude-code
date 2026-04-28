@@ -22,8 +22,9 @@ NVIDIA_NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
 class NvidiaNimProvider(OpenAICompatibleProvider):
     async def stream_response(self, request, input_tokens=0, *, request_id=None):
         """Override to support multi-key retry and failover."""
-        from config.settings import get_settings
         import httpx
+
+        from config.settings import get_settings
         from providers.exceptions import AuthenticationError, RateLimitError
 
         settings = get_settings()

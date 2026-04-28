@@ -10,7 +10,7 @@ class ErrorContext:
         model: str,
         tier: str,
         is_fallback: bool = False,
-        original_tier: str = None,
+        original_tier: str | None = None,
     ):
         self.provider = provider
         self.model = model

@@ -45,7 +45,7 @@ async def lifespan(app: FastAPI):
     """Application lifespan manager."""
 
     # --- P0.1 Startup Validation ---
-    from config.startup_validation import validate_startup, ConfigError
+    from config.startup_validation import ConfigError, validate_startup
 
     settings = get_settings()
     logger.info("Starting Claude Code Proxy...")

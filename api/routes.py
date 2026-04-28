@@ -1,12 +1,12 @@
 """FastAPI route handlers."""
 
 import json
-import traceback
-import uuid
 import os
 import time
-from pathlib import Path
+import traceback
+import uuid
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
@@ -17,11 +17,11 @@ from providers.common import get_user_facing_error_message
 from providers.exceptions import InvalidRequestError, ProviderError
 
 from .dependencies import get_provider_for_type, get_settings, require_api_key
+from .metrics import ModelMetrics
 from .models.anthropic import MessagesRequest, TokenCountRequest
 from .models.responses import ModelResponse, ModelsListResponse, TokenCountResponse
 from .optimization_handlers import try_optimizations
 from .request_utils import get_token_count
-from .metrics import ModelMetrics
 
 metrics = ModelMetrics()
 
@@ -33,7 +33,7 @@ def _load_models_from_config() -> list[ModelResponse]:
     config_path = Path(__file__).parent.parent / "models_config.json"
 
     if not config_path.exists():
-        logger.warning(f"models_config.json not found, returning empty model list")
+        logger.warning("models_config.json not found, returning empty model list")
         return []
 
     try:
@@ -43,13 +43,12 @@ def _load_models_from_config() -> list[ModelResponse]:
         models = []
 
         # Load models from each tier - use real model IDs
-        for tier, tier_models in config.get("model_tiers", {}).items():
-            for idx, model_info in enumerate(tier_models):
+        for _tier_models in config.get("model_tiers", {}).values():
+            for _model_info in _tier_models:
                 # Use the full model path as the ID (real NVIDIA NIM model)
-                model_id = model_info["model"]
+                model_id = _model_info["model"]
                 # Display name shows model name with tier info
-                display_name = model_info["name"]
-
+                display_name = _model_info["name"]
                 models.append(
                     ModelResponse(
                         id=model_id,
@@ -409,11 +408,10 @@ async def stop_cli(request: Request, _auth=Depends(require_api_key)):
 
 
 @router.post("/admin/reload-models")
-async def reload_models(auth: str = None):
+async def reload_models(auth: str | None = None):
     """Reload models_config.json without restarting server"""
     # Simple header-based auth (use proper auth in production)
     ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "changeme")
-    from fastapi import Header
 
     # Always ensure auth is a string
     if auth is None:
