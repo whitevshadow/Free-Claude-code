@@ -5,7 +5,7 @@
 ### Use Claude Code CLI & VSCode for free. No Anthropic API key required.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
-[![Python 3.14](https://img.shields.io/badge/python-3.14-3776ab.svg?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/downloads/)
+[![Python 3.14](https://img.shields.io/badge/python-3.14+-3776ab.svg?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/downloads/)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json&style=for-the-badge)](https://github.com/astral-sh/uv)
 [![Tested with Pytest](https://img.shields.io/badge/testing-Pytest-00c0ff.svg?style=for-the-badge)](https://github.com/whitevshadow/Free-Claude-code/actions/workflows/tests.yml)
 [![Type checking: Ty](https://img.shields.io/badge/type%20checking-ty-ffcc00.svg?style=for-the-badge)](https://pypi.org/project/ty/)
@@ -47,6 +47,41 @@ A lightweight proxy that routes Claude Code's Anthropic API calls to **NVIDIA NI
 Free Claude Code is natively infused with **Claw Code** philosophy and the **Caveman** agent structure. This guarantees that your interactions with Claude are not just proxied, but actively structurally enhanced:
 - **Caveman System Guardrails:** By setting `ENABLE_CAVEMAN=true`, the proxy forcefully injects terseness and absolute-urgency instructions into the AI's core system payload. The AI stops apologizing, drops the conversational fluff, acts highly autonomously, and directly executes code.
 - **Claw Code Resilience:** The proxy inherits enterprise-grade stabilization strategies ported directly from the autonomous Claw Code harness. This includes **Kimi model `is_error` sanitation** (preventing prompt crashes on Chinese reasoning models), **6MB Request Pre-flight size guards** (saving you from silent 413 blockades), and deeply actionable error mapping routines that tell you exactly how to fix timeouts.
+
+## 🔄 Automatic Model Fallback
+
+Configure hierarchical model fallback in `models_config.json` for automatic failover when models hit rate limits or errors:
+
+```json
+{
+  "model_tiers": {
+    "opus": [
+      {"name": "DeepSeek V4 Pro", "provider": "nvidia_nim", "model": "deepseek-ai/deepseek-v4-pro"},
+      {"name": "Qwen 3.5 397B", "provider": "nvidia_nim", "model": "qwen/qwen3.5-397b-a17b"}
+    ],
+    "sonnet": [
+      {"name": "Qwen 3.5 122B", "provider": "nvidia_nim", "model": "qwen/qwen3.5-122b-a10b"},
+      {"name": "Kimi K2 Instruct", "provider": "nvidia_nim", "model": "moonshotai/kimi-k2-instruct"}
+    ],
+    "haiku": [
+      {"name": "GLM-4.7", "provider": "nvidia_nim", "model": "z-ai/glm4.7"},
+      {"name": "Mistral Medium 3", "provider": "nvidia_nim", "model": "mistralai/mistral-medium-3-instruct"}
+    ]
+  },
+  "default_model": {
+    "name": "Qwen 3.5 122B",
+    "provider": "nvidia_nim",
+    "model": "qwen/qwen3.5-122b-a10b"
+  }
+}
+```
+
+**Benefits:**
+- **Automatic fallback:** If the first model fails, tries the next in the tier
+- **Cross-tier resilience:** Falls from Opus → Sonnet → Haiku if needed
+- **Logging:** Watch fallback events in logs (`docker-compose logs -f | grep FALLBACK`)
+
+See [`MODELS_CONFIG.md`](MODELS_CONFIG.md) for complete configuration guide.
 
 ## Quick Start
 
