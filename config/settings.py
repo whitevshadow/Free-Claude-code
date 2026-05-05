@@ -122,6 +122,14 @@ class Settings(BaseSettings):
         validation_alias="LM_STUDIO_BASE_URL",
     )
 
+    # ==================== LiteLLM Proxy Config ====================
+    # LiteLLM: local proxy that can front multiple backends (e.g. NVIDIA NIM keys)
+    litellm_base_url: str = Field(
+        default="http://localhost:4000",
+        validation_alias="LITELLM_BASE_URL",
+    )
+    litellm_proxy: str = Field(default="", validation_alias="LITELLM_PROXY")
+
     # ==================== Llama.cpp Config ====================
     llamacpp_base_url: str = Field(
         default="http://localhost:8080/v1",
@@ -145,6 +153,7 @@ class Settings(BaseSettings):
     open_router_proxy: str = Field(default="", validation_alias="OPENROUTER_PROXY")
     lmstudio_proxy: str = Field(default="", validation_alias="LMSTUDIO_PROXY")
     llamacpp_proxy: str = Field(default="", validation_alias="LLAMACPP_PROXY")
+    litellm_proxy: str = Field(default="", validation_alias="LITELLM_PROXY")
 
     # ==================== Provider Rate Limiting ====================
     # Effectively unlimited for single-user ultimate access
@@ -330,6 +339,7 @@ class Settings(BaseSettings):
             "deepseek",
             "lmstudio",
             "llamacpp",
+            "litellm",
         )
         if "/" not in v:
             raise ValueError(

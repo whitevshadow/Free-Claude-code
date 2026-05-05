@@ -14,6 +14,7 @@ from providers.llamacpp import LlamaCppProvider
 from providers.lmstudio import LMStudioProvider
 from providers.nvidia_nim import NvidiaNimProvider
 from providers.open_router import OpenRouterProvider
+from providers.litellm import LiteLLMProvider
 
 __all__ = [
     "APIError",
@@ -24,6 +25,7 @@ __all__ = [
     "LMStudioProvider",
     "LlamaCppProvider",
     "NvidiaNimProvider",
+    "LiteLLMProvider",
     "OpenRouterProvider",
     "OverloadedError",
     "ProviderConfig",
